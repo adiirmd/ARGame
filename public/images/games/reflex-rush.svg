@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Reflex Rush arcade game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<rect x="60" y="40" width="280" height="220" rx="14" fill="#111827" stroke="#334155" stroke-width="3"/>
+<circle cx="150" cy="110" r="26" fill="#ea580c"/>
+<circle cx="150" cy="110" r="26" fill="url(#g)"/>
+<defs>
+<radialGradient id="g" cx="0.35" cy="0.35" r="0.7">
+<stop offset="0%" stop-color="#fdba74"/>
+<stop offset="100%" stop-color="#ea580c"/>
+</radialGradient>
+</defs>
+<circle cx="250" cy="180" r="20" fill="url(#g)"/>
+<text x="200" y="240" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">REFLEX RUSH</text>
+</svg>

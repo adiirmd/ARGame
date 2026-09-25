@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Snake Arena game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<rect x="60" y="40" width="280" height="220" rx="14" fill="#111827" stroke="#334155" stroke-width="3"/>
+<g fill="#22d3ee">
+<rect x="90" y="150" width="24" height="24" rx="4"/>
+<rect x="118" y="150" width="24" height="24" rx="4"/>
+<rect x="146" y="150" width="24" height="24" rx="4"/>
+<rect x="146" y="122" width="24" height="24" rx="4"/>
+<rect x="146" y="94" width="24" height="24" rx="4"/>
+</g>
+<circle cx="230" cy="106" r="12" fill="#f472b6"/>
+<text x="200" y="230" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="22" text-anchor="middle">SNAKE ARENA</text>
+</svg>

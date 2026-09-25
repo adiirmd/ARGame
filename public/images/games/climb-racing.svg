@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Hill climb racing game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<path d="M0 220 L60 190 L120 230 L180 160 L240 210 L300 150 L360 200 L400 180 L400 300 L0 300 Z" fill="#1e293b"/>
+<path d="M0 240 L80 220 L150 250 L220 200 L290 240 L360 210 L400 230 L400 300 L0 300 Z" fill="#334155"/>
+<g>
+<circle cx="150" cy="205" r="14" fill="#f97316"/>
+<circle cx="200" cy="205" r="14" fill="#f97316"/>
+<rect x="140" y="175" width="75" height="30" rx="6" fill="#0ea5e9"/>
+<rect x="155" y="160" width="35" height="20" rx="4" fill="#0ea5e9"/>
+</g>
+<text x="200" y="270" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="16" text-anchor="middle">HILL CLIMB</text>
+</svg>

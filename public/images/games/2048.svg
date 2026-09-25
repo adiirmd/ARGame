@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="2048 puzzle game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<rect x="70" y="50" width="260" height="200" rx="14" fill="#1e293b" stroke="#334155" stroke-width="3"/>
+<g font-family="system-ui,sans-serif" font-weight="700" text-anchor="middle">
+<rect x="90" y="70" width="55" height="55" rx="6" fill="#312e81"/><text x="117" y="105" fill="#e2e8f0" font-size="20">2</text>
+<rect x="155" y="70" width="55" height="55" rx="6" fill="#4338ca"/><text x="182" y="105" fill="#e2e8f0" font-size="20">4</text>
+<rect x="220" y="70" width="55" height="55" rx="6" fill="#7c3aed"/><text x="247" y="105" fill="#fff" font-size="20">8</text>
+<rect x="90" y="135" width="55" height="55" rx="6" fill="#a855f7"/><text x="117" y="170" fill="#fff" font-size="18">16</text>
+<rect x="155" y="135" width="120" height="55" rx="6" fill="#f97316"/><text x="215" y="170" fill="#fff" font-size="18">2048</text>
+<rect x="90" y="200" width="185" height="30" rx="6" fill="#0ea5e9"/><text x="182" y="221" fill="#fff" font-size="14">SLIDE &amp; MERGE</text>
+</g>
+</svg>

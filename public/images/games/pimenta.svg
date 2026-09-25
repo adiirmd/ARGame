@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Pimenta sky shooter game thumbnail">
+<rect width="400" height="300" fill="#1a0b2e"/>
+<circle cx="60" cy="50" r="2" fill="#fff"/>
+<circle cx="150" cy="30" r="2" fill="#fff"/>
+<circle cx="320" cy="70" r="2" fill="#fff"/>
+<circle cx="250" cy="40" r="1.5" fill="#fff"/>
+<circle cx="370" cy="150" r="2" fill="#fff"/>
+<g transform="translate(200,180)">
+<ellipse cx="0" cy="0" rx="24" ry="34" fill="#dc2626"/>
+<path d="M0 -34 Q10 -50 0 -60 Q-10 -50 0 -34" fill="#16a34a"/>
+<ellipse cx="0" cy="10" rx="16" ry="20" fill="#f87171"/>
+</g>
+<rect x="192" y="230" width="4" height="30" fill="#facc15"/>
+<rect x="204" y="230" width="4" height="30" fill="#facc15"/>
+<text x="200" y="270" fill="#f5d0fe" font-family="system-ui,sans-serif" font-weight="700" font-size="16" text-anchor="middle">SKY DEFENDER</text>
+</svg>

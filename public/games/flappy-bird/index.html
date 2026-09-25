@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flappy Bird</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Nunito:wght@400;700;900&display=swap" rel="stylesheet"/>
+</head>
+<body>
+
+  <div class="stars" id="stars"></div>
+
+  <div class="game-wrapper">
+
+    <!-- Score HUD -->
+    <div class="hud">
+      <div class="hud-item">
+        <span class="hud-label">SCORE</span>
+        <span class="hud-value" id="score">0</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">BEST</span>
+        <span class="hud-value" id="best">0</span>
+      </div>
+    </div>
+
+    <!-- Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Start Screen -->
+    <div class="screen" id="startScreen">
+      <div class="bird-emoji">🐦</div>
+      <h1 class="game-title">FLAPPY<br><span class="title-accent">BIRD</span></h1>
+      <p class="instruction">PRESS <kbd>SPACE</kbd> OR TAP TO FLY</p>
+      <div class="tip">Avoid the pipes · Survive longer · Beat your best</div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div class="screen hidden" id="gameOverScreen">
+      <h2 class="over-title">GAME OVER</h2>
+      <div class="result-box">
+        <div class="result-row">
+          <span>SCORE</span>
+          <span id="finalScore">0</span>
+        </div>
+        <div class="result-divider"></div>
+        <div class="result-row">
+          <span>BEST</span>
+          <span id="finalBest">0</span>
+        </div>
+      </div>
+      <button class="play-btn" id="restartBtn">PLAY AGAIN</button>
+      <p class="instruction-small">SPACE · CLICK · TAP</p>
+    </div>
+
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

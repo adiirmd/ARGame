@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Flappy bird game thumbnail">
+<rect width="400" height="300" fill="#0a0e1a"/>
+<circle cx="60" cy="50" r="2" fill="#fff"/>
+<circle cx="330" cy="40" r="2" fill="#fff"/>
+<circle cx="200" cy="30" r="1.5" fill="#fff"/>
+<rect x="90" y="0" width="40" height="110" fill="#00b359"/>
+<rect x="90" y="190" width="40" height="110" fill="#00b359"/>
+<rect x="270" y="0" width="40" height="70" fill="#00b359"/>
+<rect x="270" y="150" width="40" height="150" fill="#00b359"/>
+<g transform="translate(200,150)">
+<circle cx="0" cy="0" r="20" fill="#ffd740"/>
+<circle cx="7" cy="-5" r="3" fill="#000"/>
+<path d="M18 0 L30 -4 L30 4 Z" fill="#ff6b6b"/>
+</g>
+<text x="200" y="270" fill="#fff" font-family="system-ui,sans-serif" font-weight="700" font-size="16" text-anchor="middle">FLAP TO FLY</text>
+</svg>

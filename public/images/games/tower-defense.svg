@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Tower defense game thumbnail">
+<rect width="400" height="300" fill="#1a2e1a"/>
+<path d="M0 140 L400 140 L400 300 L0 300 Z" fill="#365a36" opacity="0.4"/>
+<g>
+<rect x="70" y="90" width="30" height="80" fill="#78716c"/>
+<polygon points="55,90 115,90 85,55" fill="#a8a29e"/>
+<rect x="180" y="70" width="34" height="100" fill="#78716c"/>
+<polygon points="162,70 232,70 197,30" fill="#a8a29e"/>
+<rect x="290" y="100" width="28" height="70" fill="#78716c"/>
+<polygon points="276,100 332,100 304,68" fill="#a8a29e"/>
+</g>
+<circle cx="130" cy="220" r="10" fill="#ef4444"/>
+<circle cx="230" cy="200" r="10" fill="#ef4444"/>
+<circle cx="310" cy="230" r="10" fill="#ef4444"/>
+<text x="200" y="270" fill="#e7e5e4" font-family="system-ui,sans-serif" font-weight="700" font-size="16" text-anchor="middle">TOWER DEFENSE</text>
+</svg>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Fish eater game thumbnail">
+<rect width="400" height="300" fill="#082f49"/>
+<circle cx="80" cy="90" r="10" fill="#38bdf8" opacity="0.5"/>
+<circle cx="330" cy="60" r="6" fill="#38bdf8" opacity="0.4"/>
+<circle cx="60" cy="220" r="8" fill="#38bdf8" opacity="0.4"/>
+<g transform="translate(220,150)">
+<ellipse cx="0" cy="0" rx="70" ry="40" fill="#22c55e"/>
+<path d="M-65 0 L-100 -25 L-100 25 Z" fill="#16a34a"/>
+<circle cx="35" cy="-10" r="7" fill="#022c22"/>
+</g>
+<g transform="translate(90,80)">
+<ellipse cx="0" cy="0" rx="22" ry="13" fill="#f97316"/>
+<path d="M-20 0 L-34 -9 L-34 9 Z" fill="#ea580c"/>
+</g>
+<text x="200" y="255" fill="#e0f2fe" font-family="system-ui,sans-serif" font-weight="700" font-size="16" text-anchor="middle">EAT TO GROW</text>
+</svg>

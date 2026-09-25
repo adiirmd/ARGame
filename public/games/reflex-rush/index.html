@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Reflex Rush</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; width: 100%;
+    background: #0f172a; color: #e2e8f0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 12px; width: 100%; height: 100%; justify-content: center; }
+  #hud { display: flex; gap: 18px; font-size: 14px; }
+  #hud b { color: #fb923c; }
+  #arena {
+    position: relative;
+    width: min(92vw, 480px);
+    height: min(60vh, 420px);
+    background: #111827;
+    border: 2px solid #334155;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .target {
+    position: absolute;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fdba74, #ea580c);
+    border: none;
+    cursor: pointer;
+  }
+  .target:focus-visible { outline: 3px solid #fde68a; outline-offset: 2px; }
+  #msg { font-size: 13px; text-align: center; min-height: 18px; }
+  button#start {
+    background: #ea580c; color: white; border: none; border-radius: 8px;
+    padding: 10px 20px; font-size: 15px; cursor: pointer;
+  }
+  button#start:focus-visible { outline: 2px solid #fde68a; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .target { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">Score: <b id="score">0</b> &nbsp;|&nbsp; Time: <b id="time">30</b>s</div>
+  <div id="arena" role="application" aria-label="Reflex Rush target arena"></div>
+  <div id="msg" role="status" aria-live="polite">Tap Start, then tap the orange targets as fast as you can.</div>
+  <button id="start" type="button">Start</button>
+</div>
+<script>
+(function () {
+  "use strict";
+  var arena = document.getElementById("arena");
+  var scoreEl = document.getElementById("score");
+  var timeEl = document.getElementById("time");
+  var msgEl = document.getElementById("msg");
+  var startBtn = document.getElementById("start");
+
+  var score = 0;
+  var timeLeft = 30;
+  var running = false;
+  var spawnTimer = null;
+  var countdownTimer = null;
+  var currentTarget = null;
+
+  function clearTarget() {
+    if (currentTarget && currentTarget.parentNode) currentTarget.parentNode.removeChild(currentTarget);
+    currentTarget = null;
+  }
+
+  function spawnTarget() {
+    clearTarget();
+    if (!running) return;
+    var rect = arena.getBoundingClientRect();
+    var size = 56;
+    var x = Math.random() * Math.max(1, rect.width - size);
+    var y = Math.random() * Math.max(1, rect.height - size);
+
+    var btn = document.createElement("button");
+    btn.className = "target";
+    btn.type = "button";
+    btn.style.left = x + "px";
+    btn.style.top = y + "px";
+    btn.setAttribute("aria-label", "Target — tap to score");
+    btn.addEventListener("click", onHit);
+    arena.appendChild(btn);
+    currentTarget = btn;
+  }
+
+  function onHit() {
+    if (!running) return;
+    score += 1;
+    scoreEl.textContent = String(score);
+    spawnTarget();
+  }
+
+  function tickCountdown() {
+    timeLeft -= 1;
+    timeEl.textContent = String(timeLeft);
+    if (timeLeft <= 0) endGame();
+  }
+
+  function startGame() {
+    score = 0;
+    timeLeft = 30;
+    scoreEl.textContent = "0";
+    timeEl.textContent = "30";
+    msgEl.textContent = "Go! Tap the targets.";
+    running = true;
+    startBtn.disabled = true;
+    spawnTarget();
+    countdownTimer = setInterval(tickCountdown, 1000);
+  }
+
+  function endGame() {
+    running = false;
+    clearInterval(countdownTimer);
+    clearTarget();
+    startBtn.disabled = false;
+    msgEl.textContent = "Time's up! Final score: " + score + ". Press Start to play again.";
+  }
+
+  startBtn.addEventListener("click", startGame);
+})();
+</script>
+</body>
+</html>

@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AR Game
 
-## Getting Started
+Portal game browser gratis. Semua game bisa langsung dimainkan tanpa install, tanpa akun, tanpa iklan.
 
-First, run the development server:
+Live di https://game.adiirmd.my.id
+
+## Isi katalog
+
+10 game saat ini, campuran dari original dan open source dengan lisensi yang jelas:
+
+- 2048 (MIT, gabrielecirulli/2048)
+- Snake Arena (original)
+- Mind Tiles (original)
+- Reflex Rush (original)
+- Hill Climb Racing (MIT, vibeopsde/vibeClimbRacing)
+- Fish Eater (MIT, duckbrain/fish-eater)
+- HTML5 Tower Defense (MIT, awalnya oldj/html5-tower-defense)
+- Pimenta Sky Defender (MIT, izag8216/pimenta)
+- Flappy Bird (MIT, vedantmerc/flappy-bird)
+- Endless Runner (GPL-3.0, Zazilicious/endless_runner)
+
+Setiap game punya info sumber dan lisensi di halaman detailnya sendiri. Nggak ada game yang diambil dari Friv, Poki, CrazyGames, atau situs sejenis tanpa izin.
+
+## Jalanin di lokal
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Buka http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Sebelum push
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run typecheck
+npm run lint
+npm run test
+npm run validate-games
+```
 
-## Learn More
+Kalau semua lolos, baru build:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+PUBLIC_SITE_URL=https://game.adiirmd.my.id npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Struktur singkat
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `src/data/games.ts` daftar semua game dan metadatanya
+- `public/games/` file game asli (HTML/JS), disajikan langsung sebagai static file
+- `src/middleware.ts` setup CSP dengan nonce, biar hydration Next.js tetap jalan tanpa perlu unsafe-inline
+- `src/components/GamePlayer.tsx` player iframe yang dipakai semua halaman game
 
-## Deploy on Vercel
+## Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Server jalan di Debian, Next.js dijalankan lewat systemd (`ar-game.service`) dan diakses lewat reverse proxy Apache2. Domain publik dilewatkan Cloudflare Tunnel.

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Mind Tiles — Memory Match</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; width: 100%;
+    background: #0f172a; color: #e2e8f0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  #wrap { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px; width: 100%; height: 100%; }
+  #hud { display: flex; gap: 18px; font-size: 14px; }
+  #hud b { color: #a78bfa; }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    width: min(92vw, 420px);
+    max-height: 72vh;
+  }
+  .tile {
+    aspect-ratio: 1 / 1;
+    background: #1e293b;
+    border: 2px solid #334155;
+    border-radius: 10px;
+    font-size: clamp(18px, 6vw, 28px);
+    color: transparent;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s ease, background 0.15s ease;
+  }
+  .tile:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+  .tile.revealed { background: #312e81; color: #f8fafc; transform: scale(1.03); }
+  .tile.matched { background: #14532d; color: #bbf7d0; cursor: default; }
+  #msg { font-size: 13px; text-align: center; min-height: 18px; }
+  button#restart {
+    background: #7c3aed; color: white; border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 14px; cursor: pointer;
+  }
+  button#restart:focus-visible { outline: 2px solid #a78bfa; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .tile { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="hud">Moves: <b id="moves">0</b> &nbsp;|&nbsp; Matches: <b id="matches">0</b>/8</div>
+  <div id="board" role="grid" aria-label="Memory match board"></div>
+  <div id="msg" role="status" aria-live="polite"></div>
+  <button id="restart" type="button">Restart</button>
+</div>
+<script>
+(function () {
+  "use strict";
+  var SYMBOLS = ["🎮", "🚀", "🐍", "🍀", "⭐", "🔥", "🎲", "🧩"];
+  var board = document.getElementById("board");
+  var movesEl = document.getElementById("moves");
+  var matchesEl = document.getElementById("matches");
+  var msgEl = document.getElementById("msg");
+  var restartBtn = document.getElementById("restart");
+
+  var tiles = [];
+  var first = null;
+  var second = null;
+  var lock = false;
+  var moves = 0;
+  var matches = 0;
+
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  function build() {
+    board.innerHTML = "";
+    tiles = [];
+    first = null; second = null; lock = false;
+    moves = 0; matches = 0;
+    movesEl.textContent = "0";
+    matchesEl.textContent = "0";
+    msgEl.textContent = "";
+
+    var deck = shuffle(SYMBOLS.concat(SYMBOLS));
+    deck.forEach(function (sym, idx) {
+      var btn = document.createElement("button");
+      btn.className = "tile";
+      btn.type = "button";
+      btn.dataset.symbol = sym;
+      btn.dataset.index = String(idx);
+      btn.setAttribute("aria-label", "Hidden tile " + (idx + 1));
+      btn.textContent = "";
+      btn.addEventListener("click", function () { onPick(btn); });
+      board.appendChild(btn);
+      tiles.push(btn);
+    });
+  }
+
+  function onPick(btn) {
+    if (lock || btn.classList.contains("matched") || btn === first) return;
+    reveal(btn);
+
+    if (!first) {
+      first = btn;
+      return;
+    }
+    second = btn;
+    moves += 1;
+    movesEl.textContent = String(moves);
+    lock = true;
+
+    if (first.dataset.symbol === second.dataset.symbol) {
+      first.classList.add("matched");
+      second.classList.add("matched");
+      first.setAttribute("aria-label", "Matched tile");
+      second.setAttribute("aria-label", "Matched tile");
+      matches += 1;
+      matchesEl.textContent = String(matches);
+      first = null; second = null; lock = false;
+      if (matches === SYMBOLS.length) {
+        msgEl.textContent = "You matched everything in " + moves + " moves! 🎉";
+      }
+    } else {
+      setTimeout(function () {
+        hide(first); hide(second);
+        first = null; second = null; lock = false;
+      }, 700);
+    }
+  }
+
+  function reveal(btn) {
+    btn.classList.add("revealed");
+    btn.textContent = btn.dataset.symbol;
+    btn.setAttribute("aria-label", "Tile showing " + btn.dataset.symbol);
+  }
+  function hide(btn) {
+    if (!btn) return;
+    btn.classList.remove("revealed");
+    btn.textContent = "";
+    btn.setAttribute("aria-label", "Hidden tile");
+  }
+
+  restartBtn.addEventListener("click", build);
+  build();
+})();
+</script>
+</body>
+</html>

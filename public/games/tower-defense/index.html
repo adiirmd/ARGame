@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=1.0, user-scalable=yes">
+	<title>HTML5 Tower Defense</title>
+	<style type="text/css">
+		html, body {margin: 0;padding: 0;font-size: 12px;line-height: 20px;font-family: Verdana, "Times New Roman", serif;background: #1A74BA;}h1 {padding: 0;margin: 0;line-height: 48px;font-size: 18px;font-weight: bold;font-family: Verdana, "Times New Roman", serif;letter-spacing: 0.12em;}#wrapper {margin: 0 auto;}#td-wrapper {padding: 8px 24px 60px 24px;background: #E0F4FC;}#td-board {display: none;font-size: 16px;}#td-board canvas#td-canvas {position: relative;background: #fff;border: solid 1px #cdf;}#td-loading {font-size: 18px;line-height: 48px;padding: 60px 0 120px 0;font-style: italic;}#about {color: #fff;padding: 8px 24px;}#about a {color: #fff;}
+	</style>
+</head>
+
+<body id="tower-defense">
+<div id="wrapper">
+	<div id="td-wrapper">
+		<h1>HTML5 Tower Defense</h1>
+
+		<div id="td-loading">Loading...</div>
+		<div id="td-board">
+			<canvas id="td-canvas">Sorry, your browser does not support the HTML5 Canvas tag. Please use a modern browser.</canvas>
+		</div>
+	</div>
+	<div id="about">
+		Original by <a href="http://oldj.net/article/html5-tower-defense/" target="_blank">oldj.net</a> &copy; 2010-2011 &middot;
+		Source: <a href="https://github.com/oldj/html5-tower-defense" target="_blank">oldj/html5-tower-defense</a> &middot;
+		Fork: <a href="https://github.com/bubbafat/html5-tower-defense" target="_blank">bubbafat/html5-tower-defense</a> &middot;
+		License: MIT
+	</div>
+</div>
+
+<script type="text/javascript" src="td-pkg-en-min.js?_t=1293962401.7"></script>
+<script type="text/javascript">
+	window.onload = function () {
+		_TD.init("td-board", true);
+		document.getElementById("td-loading").style.display = "none";
+		document.getElementById("td-board").style.display = "block";
+	};
+</script>
+</body>
+</html>

@@ -1,0 +1,260 @@
+/* ============================================
+   Flappy Bird — Neon Night Sky Theme
+   ============================================ */
+
+:root {
+  --sky:      #0a0e1a;
+  --sky2:     #0f1628;
+  --pipe:     #00e676;
+  --pipe-dk:  #00b359;
+  --bird:     #ffd740;
+  --accent:   #ff6b6b;
+  --text:     #ffffff;
+  --muted:    #4a6080;
+  --glow:     rgba(0,230,118,.3);
+  --font-px:  'Press Start 2P', monospace;
+  --font-ui:  'Nunito', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--sky);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+  font-family: var(--font-ui);
+  position: relative;
+}
+
+/* Stars */
+.stars {
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0;
+}
+
+.star {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  animation: twinkle var(--dur, 3s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  opacity: .6;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: .2; transform: scale(1); }
+  50%       { opacity: .9; transform: scale(1.3); }
+}
+
+/* Game wrapper */
+.game-wrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* HUD */
+.hud {
+  display: flex;
+  gap: 32px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.08);
+  padding: 10px 28px;
+  border-radius: 40px;
+  backdrop-filter: blur(8px);
+}
+
+.hud-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hud-label {
+  font-family: var(--font-px);
+  font-size: .4rem;
+  color: var(--muted);
+  letter-spacing: .1em;
+}
+
+.hud-value {
+  font-family: var(--font-px);
+  font-size: .85rem;
+  color: var(--text);
+}
+
+/* Canvas */
+#gameCanvas {
+  display: block;
+  border-radius: 12px;
+  border: 2px solid rgba(255,255,255,.08);
+  box-shadow:
+    0 0 40px rgba(0,230,118,.08),
+    0 20px 60px rgba(0,0,0,.6);
+}
+
+/* Screens */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  border-radius: 12px;
+  background: rgba(10,14,26,.85);
+  backdrop-filter: blur(6px);
+  animation: fadeIn .3s ease;
+  padding: 20px;
+  text-align: center;
+}
+
+.screen.hidden { display: none; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Start screen */
+.bird-emoji {
+  font-size: 3.5rem;
+  animation: float 1.5s ease-in-out infinite;
+  filter: drop-shadow(0 0 12px var(--bird));
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+
+.game-title {
+  font-family: var(--font-px);
+  font-size: clamp(1rem, 4vw, 1.5rem);
+  line-height: 1.6;
+  color: var(--text);
+  text-shadow: 0 0 20px rgba(255,255,255,.3);
+}
+
+.title-accent {
+  color: var(--pipe);
+  text-shadow: 0 0 20px var(--glow);
+}
+
+.instruction {
+  font-family: var(--font-px);
+  font-size: .5rem;
+  color: var(--muted);
+  letter-spacing: .1em;
+  animation: blink 1.2s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+kbd {
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.2);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: var(--font-px);
+  font-size: .45rem;
+}
+
+.tip {
+  font-size: .75rem;
+  color: var(--muted);
+  max-width: 240px;
+}
+
+/* Game over screen */
+.over-title {
+  font-family: var(--font-px);
+  font-size: clamp(.9rem, 3vw, 1.3rem);
+  color: var(--accent);
+  text-shadow: 0 0 20px rgba(255,107,107,.5);
+  animation: shake .4s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+
+.result-box {
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  padding: 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 200px;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 32px;
+  font-family: var(--font-px);
+  font-size: .55rem;
+  color: var(--muted);
+}
+
+.result-row span:last-child {
+  color: var(--text);
+  font-size: .8rem;
+}
+
+.result-divider {
+  height: 1px;
+  background: rgba(255,255,255,.08);
+}
+
+.play-btn {
+  font-family: var(--font-px);
+  font-size: .55rem;
+  background: var(--pipe);
+  color: #000;
+  border: none;
+  padding: 14px 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: .1em;
+  box-shadow: 0 0 20px var(--glow);
+  transition: transform .1s, box-shadow .1s;
+}
+
+.play-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 30px var(--glow);
+}
+
+.play-btn:active { transform: scale(.97); }
+
+.instruction-small {
+  font-family: var(--font-px);
+  font-size: .38rem;
+  color: var(--muted);
+  letter-spacing: .1em;
+}
+
+/* Responsive canvas sizing handled in JS */
+@media (max-height: 700px) {
+  .hud { padding: 8px 20px; }
+  .game-wrapper { gap: 8px; }
+}

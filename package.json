@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1 --port ${PORT:-4310}",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "next start --hostname 127.0.0.1 --port ${PORT:-4310}",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --import tsx tests/",
+    "validate-games": "tsx scripts/validate-games.ts"
   },
   "dependencies": {
     "next": "16.3.6",
@@ -21,6 +24,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

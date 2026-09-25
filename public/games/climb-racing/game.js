@@ -1,0 +1,2241 @@
+"use strict";
+
+// ════════════════════════════════════════
+// VIBE CLIMB RACING — ENDLESS PROCEDURAL
+// ════════════════════════════════════════
+
+const VERSION = "v2606.3.6";
+
+// ── Tunable Constants ──
+const COIN_PICKUP_DIST_SQ = 1800;  // coin pickup distance² (dx²+dy² < this)
+const FUEL_PICKUP_DIST_SQ = 2500;  // fuel pickup distance²
+const FUEL_REFILL_PCT = 0.35;     // fuel restored per can (35% of tank capacity)
+const COIN_GAP_MIN = 600;         // min gap between coins (5x rarer — factor 0.2)
+const COIN_GAP_MAX = 1000;        // max gap between coins (5x rarer — factor 0.2)
+const FUEL_GAP_MIN = 3000;        // min gap between fuel cans (intentionally rare)
+const FUEL_GAP_MAX = 7000;        // max gap between fuel cans (intentionally rare)
+const BASE_Y = 280;               // ground level (world Y)
+const CAM_LERP_X = 0.08;           // camera follow lerp factor (X)
+const CAM_LERP_Y = 0.05;           // camera follow lerp factor (Y — smoother for vertical)
+const LOOPING_BONUS = 10;         // coins awarded per full loop (360° rotation in air)
+const MAX_SPRING = 15;            // max visual spring compression (px)
+const AIR_CONTROL = 0.002;        // air rotation force — capped, prevents death spins
+const HEAD_DEATH_PAD = 14;        // px — head "touches" ground at ~170°+ (full flip).
+                                  // = restLen - |headLocalY| + 2 for the smallest vehicle (bike).
+                                  // 40° wheelies are safe (head is 50+px above ground);
+const WHEELIE_TORQUE = 0.012;     // engine torque lifting front when gassing on uphill (wheelie → backflip)
+const WHEELIE_THRESHOLD = 0.175; // ~10° — below this slope angle, no wheelie torque (safe on flat/mild)
+
+// ── Surface Types (bodenbeschaffenheit affects grip + visuals) ──
+// gripMod is a MULTIPLIER on car.grip (which is a velocity-retention factor: vx *= grip).
+// Applied PER FRAME at 60fps — so even 0.99 vs 1.00 compounds dramatically over time.
+// Keep modifiers VERY close to 1.0. A 0.98 modifier means grip 0.992*0.98=0.972,
+// which after 60 frames = 0.972^60 = 0.18 (car retains only 18% of speed after 1s).
+const SURFACES = {
+  grass: {
+    name: "Gras",
+    gripMod: 1.0,        // baseline — normal friction
+    maxVxMod: 1.0,
+    grassColor: "#4CAF50",
+    grassDark: "#388E3C",
+    dirtColor: "#7B5B3B",
+  },
+  mud: {
+    name: "Matsch",
+    gripMod: 0.990,      // slightly more friction — sluggish
+    maxVxMod: 0.90,
+    grassColor: "#6B4E2F",
+    grassDark: "#5B3E27",
+    dirtColor: "#4A3520",
+  },
+  sand: {
+    name: "Sand",
+    gripMod: 0.985,      // heavy friction — sink, can't reach top speed
+    maxVxMod: 0.80,
+    grassColor: "#F4E4BC",
+    grassDark: "#D4C28E",
+    dirtColor: "#C2A878",
+  },
+  gravel: {
+    name: "Schotter",
+    gripMod: 0.997,      // very slightly more friction than grass
+    maxVxMod: 0.95,
+    grassColor: "#A0A0A0",
+    grassDark: "#808080",
+    dirtColor: "#606060",
+  },
+};
+
+// ── Weather (rotates per run, affects visuals + grip) ──
+const WEATHER_TYPES = {
+  sunny:  { name: "Sonnig",  skyTop: "#87CEEB", skyMid: "#B0E0E6", skyBot: "#E0F6FF", gripMod: 1.0,    farHill: "#7BA88A", midHill: "#3CB371", fog: 0 },
+  night:  { name: "Nacht",   skyTop: "#0D1B2A", skyMid: "#1B2838", skyBot: "#2C3E50", gripMod: 1.0,    farHill: "#2C3E50", midHill: "#1E3A2A", fog: 0, dark: true },
+  rain:   { name: "Regen",   skyTop: "#708090", skyMid: "#778899", skyBot: "#B0C4DE", gripMod: 1.0,    farHill: "#5F7A6A", midHill: "#2E7D32", fog: 0, rain: true },
+  snow:   { name: "Schnee",  skyTop: "#C0D0E0", skyMid: "#D0E0F0", skyBot: "#E8F0F8", gripMod: 1.0,    farHill: "#A0B8C8", midHill: "#7090A0", fog: 0, snow: true },
+  fog:    { name: "Nebel",   skyTop: "#BEBEBE", skyMid: "#D0D0D0", skyBot: "#E0E0E0", gripMod: 1.0,    farHill: "#A0B0A0", midHill: "#5A8A5A", fog: 280 },
+};
+
+// ── Adaptive Quality (FPS-based render scaling) ──
+// Tracks FPS in a rolling window. If FPS drops, reduces render resolution
+// (DPR multiplier) to save GPU work. If FPS stays high, tries to increase it back.
+// Fast devices stay at full resolution; weak devices get smoother gameplay.
+const QUALITY_CHECK_INTERVAL = 60;  // check FPS every 60 frames (~1s at 60fps)
+const QUALITY_FPS_LOW = 45;         // below this → step down render scale
+const QUALITY_FPS_HIGH = 55;        // above this → streak toward stepping up
+const QUALITY_HIGH_STREAK = 3;      // consecutive good checks before upgrading
+const QUALITY_STEPS = [1.0, 0.85, 0.7, 0.55];  // renderScale multipliers (down = fewer pixels)
+const DPR_INITIAL_CAP = 2.0;        // never start above 2.0 even on DPR-3 devices
+
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let W, H, DPR;
+let renderScale = QUALITY_STEPS[0];  // current render scale multiplier (adapted at runtime)
+let qualityIdx = 0;                  // current index into QUALITY_STEPS
+let qualityHighStreak = 0;           // consecutive "good FPS" checks
+let frameCount = 0;                  // counter for quality check interval
+let fpsSamples = [];                 // rolling FPS samples between checks
+let lastQualityCheckTime = 0;        // timestamp of last quality evaluation
+
+// ── Adaptive Quality Manager ──
+// Called every frame with the current delta time. Accumulates FPS samples
+// and periodically adjusts renderScale to keep FPS in the target range.
+function qualitySample(dt) {
+  frameCount++;
+  if (dt > 0) fpsSamples.push(1 / dt);
+
+  if (frameCount < QUALITY_CHECK_INTERVAL) return;
+
+  // Compute average FPS over the sampling window
+  let sum = 0;
+  for (const f of fpsSamples) sum += f;
+  const avgFPS = sum / fpsSamples.length;
+  fpsSamples = [];
+  frameCount = 0;
+
+  if (avgFPS < QUALITY_FPS_LOW) {
+    // FPS too low → step down (lower resolution, fewer pixels)
+    qualityHighStreak = 0;
+    if (qualityIdx < QUALITY_STEPS.length - 1) {
+      qualityIdx++;
+      renderScale = QUALITY_STEPS[qualityIdx];
+      resize();
+    }
+  } else if (avgFPS > QUALITY_FPS_HIGH) {
+    // FPS good → count streak; after N consecutive good checks, try stepping up
+    qualityHighStreak++;
+    if (qualityHighStreak >= QUALITY_HIGH_STREAK && qualityIdx > 0) {
+      qualityIdx--;
+      renderScale = QUALITY_STEPS[qualityIdx];
+      qualityHighStreak = 0;
+      resize();
+    }
+  } else {
+    // FPS in comfort zone — reset streak but don't change
+    qualityHighStreak = 0;
+  }
+}
+
+function resize() {
+  DPR = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  // Apply adaptive render scale: effective DPR = device DPR × renderScale, capped.
+  // renderScale < 1 → fewer physical pixels rendered → GPU saves work.
+  // Browser upscales the canvas via CSS width/height (bilinear, looks fine in motion).
+  const effDPR = Math.min(DPR, DPR_INITIAL_CAP) * renderScale;
+  canvas.width = Math.round(W * effDPR);
+  canvas.height = Math.round(H * effDPR);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(effDPR, 0, 0, effDPR, 0, 0);
+}
+
+// ── roundRect polyfill for older browsers (Chrome <99, Safari <16) ──
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (typeof r === "number") r = [r, r, r, r];
+    else if (Array.isArray(r) && r.length === 1) r = [r[0], r[0], r[0], r[0]];
+    this.beginPath();
+    this.moveTo(x + r[0], y);
+    this.arcTo(x + w, y, x + w, y + h, r[1]);
+    this.arcTo(x + w, y + h, x, y + h, r[2]);
+    this.arcTo(x, y + h, x, y, r[3]);
+    this.arcTo(x, y, x + w, y, r[0]);
+    this.closePath();
+    return this;
+  };
+}
+
+// ── Sound System (Web Audio API synth — zero assets) ──
+class SoundSystem {
+  constructor() {
+    this.ctx = null;
+    this.engineOsc = null;
+    this.engineGain = null;
+    this.muted = false;
+  }
+
+  // Must be called from a user gesture (click/touch) to satisfy autoplay policies
+  init() {
+    if (!this.ctx) {
+      try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; }
+    }
+    if (this.ctx.state === "suspended") this.ctx.resume();
+    this._startEngine();
+  }
+
+  _startEngine() {
+    if (!this.ctx) return;
+    // Stop previous engine if any
+    if (this.engineOsc) { try { this.engineOsc.stop(); } catch (e) {} }
+    this.engineOsc = this.ctx.createOscillator();
+    this.engineGain = this.ctx.createGain();
+    this.engineFilter = this.ctx.createBiquadFilter();
+    this.engineFilter.type = "lowpass";
+    this.engineFilter.frequency.value = 400;
+    this.engineFilter.Q.value = 2;
+    this.engineOsc.type = "square";
+    this.engineOsc.frequency.value = 35;
+    this.engineGain.gain.value = 0;
+    this.engineOsc.connect(this.engineFilter);
+    this.engineFilter.connect(this.engineGain);
+    this.engineGain.connect(this.ctx.destination);
+    this.engineOsc.start();
+  }
+
+  // Update engine sound: pitch & volume scale with speed
+  updateEngine(vx, onGround) {
+    if (!this.engineOsc || !this.engineGain || this.muted) return;
+    const speed = Math.abs(vx);
+    const freq = 30 + speed * 8; // 30Hz idle → ~140Hz at max speed
+    const vol = onGround ? Math.min(0.15, 0.03 + speed * 0.009) : 0.015;
+    this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.05);
+    this.engineFilter.frequency.setTargetAtTime(300 + speed * 30, this.ctx.currentTime, 0.08);
+    this.engineGain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.08);
+  }
+
+  _tone(freq, dur, type = "sine", vol = 0.2, when = 0) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime + when;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.connect(g);
+    g.connect(this.ctx.destination);
+    osc.start(t);
+    osc.stop(t + dur);
+  }
+
+  _noise(dur, vol = 0.3, when = 0) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime + when;
+    const buf = this.ctx.createBuffer(1, this.ctx.sampleRate * dur, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 800;
+    src.connect(filter);
+    filter.connect(g);
+    g.connect(this.ctx.destination);
+    src.start(t);
+    src.stop(t + dur);
+  }
+
+  coin() { this._tone(880, 0.08, "sine", 0.15); this._tone(1320, 0.12, "sine", 0.15, 0.06); }
+  fuel() { this._tone(440, 0.1, "triangle", 0.18); this._tone(660, 0.15, "triangle", 0.15, 0.08); }
+  levelUp() { this._tone(523, 0.1, "square", 0.12); this._tone(659, 0.1, "square", 0.12, 0.1); this._tone(784, 0.2, "square", 0.12, 0.2); }
+  crash() {
+    // Kill engine sound first
+    if (this.engineGain && this.ctx) {
+      this.engineGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.02);
+    }
+    // Crash sound: dramatic descending tones + noise
+    this._noise(0.5, 0.4);
+    this._tone(200, 0.15, "sawtooth", 0.25, 0);
+    this._tone(150, 0.15, "sawtooth", 0.25, 0.12);
+    this._tone(100, 0.15, "sawtooth", 0.25, 0.24);
+    this._tone(60, 0.4, "sawtooth", 0.3, 0.36);
+  }
+
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.engineGain) this.engineGain.gain.setTargetAtTime(this.muted ? 0 : 0.02, this.ctx.currentTime, 0.1);
+    return this.muted;
+  }
+}
+const sfx = new SoundSystem();
+
+// ════════════════════════════════════════
+// SAVE SYSTEM (localStorage)
+// ════════════════════════════════════════
+const SAVE_KEY = "vcr_save_v1";
+
+// Per-vehicle upgrade state (each vehicle has its own motor/tires/tank levels)
+function defaultVehicleUpgrades() {
+  return { motor: 0, tires: 0, tank: 0 };
+}
+// Hardcoded vehicle keys (VEHICLES is declared later — can't reference it here)
+function defaultAllUpgrades() {
+  const u = {};
+  for (const k of ["jeep", "truck", "bike"]) u[k] = defaultVehicleUpgrades();
+  return u;
+}
+
+const DEFAULT_SAVE = {
+  name: null,
+  wallet: 0,          // persistent coins across runs
+  best: { distance: 0, level: 1, coins: 0 },
+  upgrades: defaultAllUpgrades(),  // { jeep:{motor,tires,tank}, truck:{...}, bike:{...} }
+  vehicle: "jeep",            // currently selected vehicle key
+  unlockedVehicles: ["jeep"], // array of unlocked vehicle keys
+};
+
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return { ...DEFAULT_SAVE };
+    const s = JSON.parse(raw);
+    // Migrate old flat upgrades format → per-vehicle (assign to jeep)
+    let upgrades = defaultAllUpgrades();
+    if (s.upgrades) {
+      if (s.upgrades.motor !== undefined && typeof s.upgrades.motor === "number") {
+        // Old flat format: {motor:0, tires:0, tank:0} → migrate to jeep
+        upgrades.jeep = { motor: s.upgrades.motor, tires: s.upgrades.tires, tank: s.upgrades.tank };
+      } else {
+        // New per-vehicle format: merge each vehicle's upgrades
+        // Hardcoded keys — VEHICLES may not be declared yet at loadSave() call time
+        for (const k of ["jeep", "truck", "bike"]) {
+          if (s.upgrades[k]) upgrades[k] = { ...defaultVehicleUpgrades(), ...s.upgrades[k] };
+        }
+      }
+    }
+    return {
+      ...DEFAULT_SAVE,
+      ...s,
+      best: { ...DEFAULT_SAVE.best, ...(s.best||{}) },
+      upgrades,
+      unlockedVehicles: s.unlockedVehicles || ["jeep"],
+      vehicle: s.vehicle || "jeep",
+    };
+  } catch (e) { return { ...DEFAULT_SAVE }; }
+}
+
+function saveSave() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(saveData)); } catch (e) {}
+}
+
+let saveData = loadSave();
+
+// ════════════════════════════════════════
+// UPGRADES
+// ════════════════════════════════════════
+const UPGRADES = {
+  motor: {
+    name: "⚙️ Motor",
+    desc: "+10% Beschleunigung pro Level",
+    maxLevel: 5,
+    costs: [100, 250, 500, 1000, 2000],
+  },
+  tires: {
+    name: "🛞 Reifen",
+    desc: "+15% Bodenhaftung pro Level",
+    maxLevel: 5,
+    costs: [100, 250, 500, 1000, 2000],
+  },
+  tank: {
+    name: "⛽ Tank",
+    desc: "+20% Tankkapazität, weniger Verbrauch",
+    maxLevel: 5,
+    costs: [100, 250, 500, 1000, 2000],
+  },
+};
+
+// ════════════════════════════════════════
+// VEHICLES — selectable cars with unique physics & appearance
+// ════════════════════════════════════════
+const VEHICLES = {
+  jeep: {
+    name: "🚙 Jeep",
+    desc: "Ausgewogen — solide Allround-Werte",
+    unlockCost: 0,  // default, free
+    // Base physics (before upgrades)
+    base: {
+      wheelBase: 70,
+      wheelRadius: 20,
+      mass: 1.5,
+      inertia: 4500,
+      engineFwd: 0.38,
+      engineBack: 0.45,
+      grip: 0.992,
+      slopeAlign: 0.10,
+      maxFuel: 100,
+      drainRate: 0.05,
+      passiveDrain: 0.006,
+      flipThreshold: 0.75,  // π multiplier — tighter = harder to flip
+    },
+    // Visual params for draw()
+    visual: {
+      bodyColor: "#e74c3c",
+      bodyDark: "#c0392b",
+      bodyStroke: "#922b21",
+      cabinColor: "#34495e",
+      cabinDark: "#2c3e50",
+      wheelColor: "#1a1a1a",
+      bodyWidth: 80,
+      bodyHeight: 24,
+      cabinWidth: 38,
+      cabinHeight: 20,
+      cabinOffset: -18,   // cabin X offset from center
+      hoodSlope: true,     // has sloped hood
+      hasRollBar: true,
+      hasExhaust: true,
+      hasSkidPlate: true,
+      driverHelmetColor: "#e74c3c",
+    },
+  },
+  truck: {
+    name: "🛻 Truck",
+    desc: "Schwer & stabil — schwer umzukippen, aber träge",
+    unlockCost: 500,
+    base: {
+      wheelBase: 80,
+      wheelRadius: 24,
+      mass: 2.2,
+      inertia: 6500,
+      engineFwd: 0.34,
+      engineBack: 0.40,
+      grip: 0.990,
+      slopeAlign: 0.08,
+      maxFuel: 120,
+      drainRate: 0.06,
+      passiveDrain: 0.007,
+      flipThreshold: 0.80,  // harder to flip (heavier, lower center)
+    },
+    visual: {
+      bodyColor: "#2980b9",
+      bodyDark: "#1f6aa5",
+      bodyStroke: "#154e7c",
+      cabinColor: "#2c3e50",
+      cabinDark: "#1a2530",
+      wheelColor: "#1a1a1a",
+      bodyWidth: 90,
+      bodyHeight: 30,
+      cabinWidth: 44,
+      cabinHeight: 24,
+      cabinOffset: -22,
+      hoodSlope: true,
+      hasRollBar: true,
+      hasExhaust: true,
+      hasSkidPlate: true,
+      driverHelmetColor: "#2980b9",
+    },
+  },
+  bike: {
+    name: "🏍️ Bike",
+    desc: "Schnell & wendig — leicht zu kippen, aber agil",
+    unlockCost: 800,
+    base: {
+      wheelBase: 50,
+      wheelRadius: 16,
+      mass: 0.9,
+      inertia: 2200,
+      engineFwd: 0.42,
+      engineBack: 0.50,
+      grip: 0.994,
+      slopeAlign: 0.12,
+      maxFuel: 70,
+      drainRate: 0.04,
+      passiveDrain: 0.005,
+      flipThreshold: 0.65,  // easier to flip (light, short wheelbase)
+    },
+    visual: {
+      bodyColor: "#2ecc71",
+      bodyDark: "#27ae60",
+      bodyStroke: "#1e8449",
+      cabinColor: "#2c3e50",
+      cabinDark: "#1a2530",
+      wheelColor: "#1a1a1a",
+      bodyWidth: 56,
+      bodyHeight: 18,
+      cabinWidth: 20,
+      cabinHeight: 14,
+      cabinOffset: -8,
+      hoodSlope: false,   // no hood slope — bike shape
+      hasRollBar: false,
+      hasExhaust: true,
+      hasSkidPlate: false,
+      driverHelmetColor: "#2ecc71",
+    },
+  },
+};
+
+window.addEventListener("resize", resize);
+resize();
+
+// ── Difficulty scaling — every 1000m the terrain gets rougher (smooth transition) ──
+function difficultyAt(x) {
+  const LEVEL_DIST = 10000;    // 1000m in world units (x is in decimeters)
+  const TRANSITION = 500;     // smooth transition zone in world units
+  const levelX = x / LEVEL_DIST;
+  const baseLevel = Math.floor(levelX);
+  const frac = levelX - baseLevel;
+  // smoothstep: 0 at boundary start, 1 at boundary end, smooth in between
+  const t = Math.max(0, Math.min(1, (frac * LEVEL_DIST - (LEVEL_DIST - TRANSITION)) / TRANSITION));
+  const smooth = t * t * (3 - 2 * t);  // classic smoothstep
+  return 1 + (baseLevel + smooth) * 0.35;
+}
+
+// ── Terrain generation: random control points with Catmull-Rom interpolation ──
+// Replaces layered-sine noise. Control points are placed at random intervals
+// with random-walk heights that drift freely (not centered on 0), producing
+// organic terrain: real hills, valleys, plateaus — no visible "algorithm".
+let controlPoints = []; // {x, y} in world coords
+
+// Surface regions: {startX, surface} — terrain segments with different ground types
+let surfaceRegions = [];
+// Special zones: {startX, endX, type} — structured terrain sections
+let specialZones = [];
+// Current weather (picked per run)
+let currentWeather = null;
+
+const SURFACE_KEYS = ["grass", "mud", "sand", "gravel"];
+const WEATHER_KEYS = ["sunny", "night", "rain", "snow", "fog"];
+
+function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function resetTerrain() {
+  // Start with a few random control points so terrain is interesting from the get-go
+  // (flat zone x<200 with smooth blend to 500, so first point can be wild)
+  controlPoints = [{ x: 0, y: BASE_Y }];
+  // Pre-generate a few wild points so the terrain doesn't slowly ramp up
+  let lastY = BASE_Y;
+  for (let i = 1; i <= 5; i++) {
+    const interval = 120 + Math.random() * 280;
+    const nextX = controlPoints[i - 1].x + interval;
+    const maxDriftForSlope = interval * 0.7; // clamp slope to ~35°
+    const rawDrift = (Math.random() - 0.5) * 160; // strong initial drift, no difficulty scaling
+    const drift = Math.max(-maxDriftForSlope, Math.min(maxDriftForSlope, rawDrift));
+    const pull = (BASE_Y - lastY) * 0.05;
+    lastY = lastY + drift + pull;
+    controlPoints.push({ x: nextX, y: lastY });
+  }
+
+  // Reset surface regions — first 1500 units are grass (safe start)
+  surfaceRegions = [{ startX: 0, surface: "grass" }];
+  // Reset special zones
+  specialZones = [];
+  // Pick random weather for this run
+  currentWeather = WEATHER_TYPES[pickRandom(WEATHER_KEYS)];
+}
+
+// ── Surface placement: every 1500-3500 units, switch to a new surface type ──
+function ensureSurfaceRegions(upToX) {
+  const last = surfaceRegions[surfaceRegions.length - 1];
+  while (last.startX + 1500 + Math.random() * 2000 < upToX) {
+    const nextStart = last.startX + 1500 + Math.random() * 2000;
+    // Pick a surface different from the current one
+    let nextSurface;
+    do { nextSurface = pickRandom(SURFACE_KEYS); } while (nextSurface === last.surface);
+    // Grass is more common (weight 3), others weight 1
+    if (Math.random() < 0.4) nextSurface = "grass";
+    surfaceRegions.push({ startX: nextStart, surface: nextSurface });
+    return; // one per call, ensures progressive generation
+  }
+}
+
+// Get surface type at world x
+function surfaceAt(x) {
+  if (surfaceRegions.length === 0) return SURFACES.grass;
+  let current = surfaceRegions[0];
+  for (const region of surfaceRegions) {
+    if (region.startX <= x) current = region;
+    else break;
+  }
+  return SURFACES[current.surface] || SURFACES.grass;
+}
+
+// ── Special Zones: structured terrain sections every 2000-5000 units ──
+const ZONE_TYPES = ["boost", "coinfield", "mountain", "chaos"];
+const ZONE_GAP_MIN = 2000;
+const ZONE_GAP_MAX = 5000;
+const ZONE_LENGTH = 800; // each zone is ~800px wide
+
+function ensureSpecialZones(upToX) {
+  while (specialZones.length === 0 || specialZones[specialZones.length - 1].endX < upToX) {
+    const prevEnd = specialZones.length === 0 ? 2000 : specialZones[specialZones.length - 1].endX;
+    const gap = ZONE_GAP_MIN + Math.random() * (ZONE_GAP_MAX - ZONE_GAP_MIN);
+    const start = prevEnd + gap;
+    const type = pickRandom(ZONE_TYPES);
+    specialZones.push({ startX: start, endX: start + ZONE_LENGTH, type });
+  }
+}
+
+// Check if x is inside a special zone, return zone or null
+function zoneAt(x) {
+  for (const z of specialZones) {
+    if (x >= z.startX && x <= z.endX) return z;
+  }
+  return null;
+}
+
+// Generate control points ahead of the given x-coordinate
+// Injects terrain features (kickers, gaps, double-humps) and special zone shapes
+function ensureControlPoints(upToX) {
+  // Make sure surface regions and zones are generated ahead too
+  ensureSurfaceRegions(upToX + VIEW_AHEAD);
+  ensureSpecialZones(upToX + VIEW_AHEAD);
+
+  while (controlPoints[controlPoints.length - 1].x < upToX) {
+    const last = controlPoints[controlPoints.length - 1];
+    const interval = 120 + Math.random() * 280; // 120-400 world units
+    const nextX = last.x + interval;
+    const diff = difficultyAt(nextX);
+    const maxDriftForSlope = interval * 0.7; // max 35° slope between control points
+
+    // Check if we're in a special zone — override terrain shape
+    const zone = zoneAt(nextX);
+    let y;
+
+    if (zone && nextX > zone.startX + 50) {
+      // ── Special Zone terrain shapes ──
+      const zProgress = (nextX - zone.startX) / ZONE_LENGTH; // 0→1 across zone
+
+      if (zone.type === "boost") {
+        // Mostly flat with small gentle bumps — speed section
+        y = BASE_Y + Math.sin(zProgress * Math.PI * 3) * 15;
+      } else if (zone.type === "mountain") {
+        // Big steep mountain pass — test for engine power
+        const mountainHeight = 200 * diff;
+        y = BASE_Y - Math.sin(zProgress * Math.PI) * mountainHeight;
+      } else if (zone.type === "chaos") {
+        // Extreme jagged terrain — survival test
+        const rawDrift = (Math.random() - 0.5) * 200 * diff;
+        const drift = Math.max(-maxDriftForSlope, Math.min(maxDriftForSlope, rawDrift));
+        const pull = (BASE_Y - last.y) * 0.03;
+        y = last.y + drift + pull;
+      } else {
+        // coinfield — gentle rolling hills (coins placed densely by CoinSystem)
+        y = BASE_Y + Math.sin(zProgress * Math.PI * 4) * 40;
+      }
+    } else {
+      // ── Normal random-walk terrain with occasional features ──
+      // 15% chance for a terrain feature (kicker, gap, double-hump)
+      const featureRoll = Math.random();
+
+      if (featureRoll < 0.04 && interval > 200) {
+        // Kicker ramp: steep up then steep down (launch pad)
+        const rampHeight = 60 + Math.random() * 80;
+        y = last.y - rampHeight;
+      } else if (featureRoll < 0.07 && interval > 250) {
+        // Gap: drop terrain sharply then back up (jump required)
+        // We create a valley — the car must jump across
+        const gapDepth = 80 + Math.random() * 60;
+        y = last.y + gapDepth;
+      } else if (featureRoll < 0.10) {
+        // Double-hump: two quick bumps (hop-hop)
+        const humpHeight = 30 + Math.random() * 30;
+        y = last.y - humpHeight * Math.sin(Math.random() * Math.PI);
+      } else {
+        // Standard random walk
+        const rawDrift = (Math.random() - 0.5) * 130 * diff;
+        const drift = Math.max(-maxDriftForSlope, Math.min(maxDriftForSlope, rawDrift));
+        const pull = (BASE_Y - last.y) * 0.06;
+        y = last.y + drift + pull;
+      }
+    }
+
+    // Clamp y to prevent extreme values
+    y = Math.max(BASE_Y - 400, Math.min(BASE_Y + 300, y));
+    controlPoints.push({ x: nextX, y });
+  }
+}
+
+// Catmull-Rom spline interpolation between 4 control points
+function catmullRom(y0, y1, y2, y3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return 0.5 * (
+    (2 * y1) +
+    (-y0 + y2) * t +
+    (2 * y0 - 5 * y1 + 4 * y2 - y3) * t2 +
+    (-y0 + 3 * y1 - 3 * y2 + y3) * t3
+  );
+}
+
+function terrainHeight(x) {
+  if (x < 200) return BASE_Y;
+  ensureControlPoints(x);
+  // Smooth blend from flat (x=200) to full terrain (x=500) — prevents hard step
+  const rawHeight = (() => {
+    const pts = controlPoints;
+    let lo = 0, hi = pts.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (pts[mid].x <= x) lo = mid; else hi = mid;
+    }
+    const p0 = pts[lo], p1 = pts[hi];
+    const t = (x - p0.x) / (p1.x - p0.x);
+    const yPrev = pts[Math.max(0, lo - 1)].y;
+    const yNext = pts[Math.min(pts.length - 1, hi + 1)].y;
+    return catmullRom(yPrev, p0.y, p1.y, yNext, t);
+  })();
+  // Smoothstep blend: 0 at x=200, 1 at x=500
+  const blend = Math.min(1, Math.max(0, (x - 200) / 300));
+  const s = blend * blend * (3 - 2 * blend); // smoothstep
+  return BASE_Y + (rawHeight - BASE_Y) * s;
+}
+
+// ── Terrain Manager ──
+const SEGMENT_WIDTH = 6;
+const VIEW_AHEAD = 2500;
+const VIEW_BEHIND = 800;
+
+class Terrain {
+  constructor() {
+    this.points = []; // {x, y}
+    this.lastX = 0;
+    this.init();
+  }
+
+  init() {
+    this.points = [];
+    this.lastX = 0;
+    // Generate initial flat + terrain
+    while (this.lastX < VIEW_AHEAD) {
+      this.points.push({ x: this.lastX, y: terrainHeight(this.lastX) });
+      this.lastX += SEGMENT_WIDTH;
+    }
+  }
+
+  update(camX) {
+    // Generate ahead
+    const needX = camX + VIEW_AHEAD;
+    while (this.lastX < needX) {
+      this.points.push({ x: this.lastX, y: terrainHeight(this.lastX) });
+      this.lastX += SEGMENT_WIDTH;
+    }
+    // NOTE: We do NOT trim behind — keeping all points allows driving backwards.
+    // Memory is negligible: ~1700 points per 10km (each point = 2 numbers).
+  }
+
+  // Surface type at world x (delegates to global surfaceAt)
+  surfaceAt(x) {
+    return surfaceAt(x);
+  }
+
+  // Ground height at world x (binary search in points)
+  groundAt(x) {
+    const pts = this.points;
+    if (x <= pts[0].x) return pts[0].y;
+    if (x >= pts[pts.length - 1].x) return pts[pts.length - 1].y;
+    let lo = 0, hi = pts.length - 1;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      if (pts[mid].x <= x) lo = mid; else hi = mid;
+    }
+    const t = (x - pts[lo].x) / (pts[hi].x - pts[lo].x);
+    return pts[lo].y + (pts[hi].y - pts[lo].y) * t;
+  }
+
+  // Slope at world x
+  slopeAt(x) {
+    const dx = 5;
+    return (this.groundAt(x + dx) - this.groundAt(x - dx)) / (2 * dx);
+  }
+
+  // Find index range of points visible on screen [camX-50, camX+W+50]
+  // Uses binary search — O(log n) instead of O(n) per frame.
+  visibleRange(camX, screenW) {
+    const pts = this.points;
+    const minX = camX - 50;
+    const maxX = camX + screenW + 50;
+
+    // Binary search for first point >= minX
+    let lo = 0, hi = pts.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (pts[mid].x < minX) lo = mid + 1; else hi = mid;
+    }
+    const start = Math.max(0, lo - 1); // include one point before for lineTo continuity
+
+    // Binary search for first point > maxX
+    lo = start; hi = pts.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (pts[mid].x <= maxX) lo = mid + 1; else hi = mid;
+    }
+    const end = Math.min(pts.length, lo + 1); // include one point after
+
+    return [start, end];
+  }
+}
+
+// ── Car Physics ──
+class Car {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.vx = 0;
+    this.vy = 0;
+    this.angle = 0;
+    this.angVel = 0;
+    this.onGround = false;
+    this.dead = false;
+    this.airSpin = 0;          // accumulated rotation in air (for loop detection)
+    this.wheelSpin = 0;        // accumulated wheel rotation for visual spin (radians)
+
+    // Visual suspension — spring compression per wheel (visual only, no physics impact)
+    this.springL = 0;
+    this.springR = 0;
+
+    // ── Load vehicle stats from VEHICLES (base) × UPGRADES (multipliers) ──
+    const vDef = VEHICLES[saveData.vehicle] || VEHICLES.jeep;
+    const vb = vDef.base;
+    this.vehicleKey = saveData.vehicle || "jeep";
+    this.visual = vDef.visual;
+
+    this.wheelBase = vb.wheelBase;
+    this.wheelRadius = vb.wheelRadius;
+    this.wheelOffset = this.wheelRadius;
+    this.mass = vb.mass;
+    this.inertia = vb.inertia;
+    this.flipThreshold = vb.flipThreshold;  // π multiplier for flip detection
+
+    // Apply upgrades as multipliers on top of vehicle base (per-vehicle upgrade levels)
+    const u = saveData.upgrades[saveData.vehicle] || defaultVehicleUpgrades();
+
+    // Motor upgrade: percentage boost on vehicle's base engine force
+    this.engineFwd = vb.engineFwd * (1 + 0.1 * u.motor);
+    this.engineBack = vb.engineBack * (1 + 0.1 * u.motor);
+
+    // Tires upgrade: grip + slopeAlign improvement on vehicle's base
+    this.grip = vb.grip + 0.001 * u.tires;
+    this.slopeAlign = vb.slopeAlign + 0.02 * u.tires;
+
+    // Tank upgrade: capacity + drain reduction on vehicle's base
+    this.maxFuel = vb.maxFuel * (1 + 0.1 * u.tank);
+    this.drainRate = vb.drainRate * (1 - 0.08 * u.tank);
+    this.passiveDrain = vb.passiveDrain * (1 - 0.08 * u.tank);
+
+    this.fuel = this.maxFuel;
+  }
+
+  update(dt, terrain, input) {
+    const gas = input.gas ? 1 : 0;
+    const brake = input.brake ? 1 : 0;
+    const dts = dt * 60; // delta in "frame units"
+
+    // ── Physics constants ──
+    const GRAVITY = 0.40;
+    const ENGINE_FWD = this.engineFwd;
+    const ENGINE_BACK = this.engineBack;
+    const AIR_DRAG = 0.995;
+    const ANG_DAMP = 0.96;
+
+    // ── Surface & Weather modifiers ──
+    // effectiveGrip: velocity retention per frame (higher = less friction = slippery)
+    // tractionMod: how much engine force transfers to the road (lower = wheelspin = slow accel)
+    const surface = terrain.surfaceAt(this.x);
+    const weatherMod = currentWeather ? currentWeather.gripMod : 1.0;
+    const effectiveGrip = this.grip * surface.gripMod * weatherMod;
+    const MAX_VX = 14 * surface.maxVxMod;
+    // Traction = how well the car puts power down. Ice = wheelspin (low traction),
+    // sand/mud = bogged down. Grass = full traction.
+    // Map gripMod (1.0 = neutral) to traction: <1.0 → less traction, >1.0 → slightly more
+    const tractionMod = Math.max(0.5, Math.min(1.1, surface.gripMod * 0.5 + 0.5));
+
+    // ── Mass & inertia factors (Jeep = 1.0 reference) ──
+    // Heavier mass → slower acceleration, but retains speed better (momentum)
+    // Heavier inertia → more rotational stability, slower slope alignment
+    const massFactor = 1.5 / this.mass;        // truck=0.68, bike=1.67
+    const inertiaFactor = 4500 / this.inertia;  // truck=0.69, bike=2.05
+
+    // Forward direction (angle 0 = pointing right)
+    const fwdX = Math.cos(this.angle);
+    const fwdY = Math.sin(this.angle);
+
+    // Gravity (always down in screen) — mass-independent (constant accel)
+    this.vy += GRAVITY * dts;
+
+    // Engine: F/m — heavier vehicles accelerate slower
+    if (gas && this.fuel > 0) {
+      this.fuel -= this.drainRate * dts;
+      if (this.onGround) {
+        this.vx += fwdX * ENGINE_FWD * massFactor * tractionMod * dts;
+        this.vy += fwdY * ENGINE_FWD * massFactor * tractionMod * dts;
+      }
+    }
+    if (brake && this.fuel > 0) {
+      this.fuel -= this.drainRate * 0.5 * dts;
+      if (this.onGround) {
+        this.vx -= fwdX * ENGINE_BACK * massFactor * tractionMod * dts;
+        this.vy -= fwdY * ENGINE_BACK * massFactor * tractionMod * dts;
+      }
+    }
+
+    // Passive fuel drain
+    this.fuel -= this.passiveDrain * dts;
+
+    // Air drag: heavier vehicles lose less speed (momentum ∝ mass)
+    const dragLoss = (1 - AIR_DRAG) * massFactor;
+    this.vx *= (1 - dragLoss);
+    this.vy *= 0.999;
+
+    // Speed clamp
+    if (this.vx > MAX_VX) this.vx = MAX_VX;
+    if (this.vx < -MAX_VX * 0.6) this.vx = -MAX_VX * 0.6;
+
+    // Angular damping: heavier = more stable (rotation stops faster)
+    const angDampLoss = (1 - ANG_DAMP) / massFactor;
+    this.angVel *= (1 - angDampLoss);
+    if (!this.onGround) {
+      // Air control: gentle nudge, capped — for wheelie/endo adjustment, not death spins
+      // Loopings happen from terrain launches + angular momentum, NOT from holding gas
+      if (gas) this.angVel = Math.max(this.angVel - AIR_CONTROL * dts, -0.04);
+      if (brake) this.angVel = Math.min(this.angVel + AIR_CONTROL * dts, 0.04);
+    }
+
+    // Integrate
+    this.x += this.vx * dts;
+    this.y += this.vy * dts;
+    this.angle += this.angVel * dts;
+
+    // ── Visual wheel spin: accumulate rotation from forward velocity ──
+    // ω = v / r — both wheels spin the same direction (forward = clockwise in screen-space)
+    this.wheelSpin += (this.vx / this.wheelRadius) * dts;
+
+    // ── Loop detection: accumulate angular velocity while airborne ──
+    // Use angVel*dts (true rotation) NOT angle-lastAngle (corrupted by slope alignment)
+    if (!this.onGround) {
+      this.airSpin += this.angVel * dts;
+    } else {
+      this.airSpin = 0;
+    }
+    this.loopCompleted = Math.abs(this.airSpin) >= Math.PI * 2;
+
+    // ── Simple collision (stable snap) + visual suspension ──
+    const halfWB = this.wheelBase / 2;
+    const wheelOffset = this.wheelOffset;
+    const restLen = wheelOffset + this.wheelRadius;
+
+    // Wheel world positions for ground detection
+    const wlX = this.x - fwdX * halfWB - fwdY * wheelOffset;
+    const wrX = this.x + fwdX * halfWB - fwdY * wheelOffset;
+
+    // Ground height under each wheel
+    const groundL = terrain.groundAt(wlX);
+    const groundR = terrain.groundAt(wrX);
+    const avgGround = (groundL + groundR) / 2;
+
+    // Car bottom (at rest, no compression)
+    const carBottom = this.y + restLen;
+
+    this.onGround = false;
+    let slope = 0;  // cached once per frame, reused for slope alignment
+
+    // Snap to ground when at/below terrain
+    if (carBottom >= avgGround) {
+      this.y = avgGround - restLen;
+      this.onGround = true;
+
+      // ── Landing crash: replaced by head-touch death model (see end of update)
+
+      // Terrain-following: project velocity onto slope direction
+      // This preserves gravity's along-slope component (uphill slows, downhill accelerates)
+      // instead of overwriting vy and losing gravity entirely
+      slope = terrain.slopeAt(this.x);
+      const s = slope;
+      const vAlong = (this.vx + this.vy * s) / (1 + s * s);
+      this.vx = vAlong;
+      this.vy = s * vAlong;
+
+      // Rolling friction (upgradeable)
+      this.vx *= effectiveGrip;
+
+      // ── Engine wheelie torque: gassing on steep uphill pushes front up.
+      // Proportional to slope steepness beyond WHEELIE_THRESHOLD (~10°).
+      // On flat/mild terrain: no effect (safe to gas). On steep hills: front lifts → can flip.
+      // Once tilting back, momentum continues the rotation (tiltBack factor).
+      if (gas && this.fuel > 0) {
+        const slopeAngle = Math.atan2(slope, 1);
+        const excess = Math.max(0, slopeAngle - WHEELIE_THRESHOLD);
+        const tiltBack = Math.max(0, this.angle - slopeAngle);
+        this.angVel += WHEELIE_TORQUE * (excess + tiltBack * 0.3) * massFactor * dts;
+      }
+      if (brake && this.fuel > 0) {
+        this.angVel -= WHEELIE_TORQUE * 0.3 * massFactor * dts;
+      }
+
+      // ── Visual suspension: compress springs based on terrain unevenness ──
+      // Each wheel compresses based on how far below the avg ground its side is
+      const groundDiff = groundR - groundL; // positive = right side lower
+      const compression = Math.min(Math.abs(groundDiff) * 0.3, MAX_SPRING);
+      // Smoothly interpolate spring compression (visual only — no physics impact)
+      if (groundDiff > 0) {
+        // Right wheel hits higher ground → compress right
+        this.springR += (compression - this.springR) * 0.15 * dts;
+        this.springL *= 0.9;
+      } else {
+        this.springL += (compression - this.springL) * 0.15 * dts;
+        this.springR *= 0.9;
+      }
+      // Landing impact: compress both springs based on vy at touchdown
+      if (this.vy < -3) {
+        const impact = Math.min(Math.abs(this.vy) * 0.8, MAX_SPRING);
+        this.springL += (impact - this.springL) * 0.2;
+        this.springR += (impact - this.springR) * 0.2;
+      }
+    } else {
+      // In air — springs rebound to rest
+      this.springL *= 0.88;
+      this.springR *= 0.88;
+    }
+
+    // ── Slope alignment when grounded (skip if upside-down!) ──
+    // Normalized angle [0, 2π) — cached once, used for both slope alignment and flip check
+    const normAngle = ((this.angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    if (this.onGround) {
+      // Check if car is upside-down (roof on ground) — tighter threshold matches flip check
+      const upsideDown = normAngle > Math.PI * this.flipThreshold && normAngle < Math.PI * (2 - this.flipThreshold);
+      if (!upsideDown) {
+        this.angVel *= (1 - 0.4 / massFactor);  // ground angular damping: heavier = more damping
+        // Target angle = terrain slope angle
+        const targetAngle = Math.atan2(slope, 1);
+        // Smoothly steer car angle toward slope — heavier inertia = slower alignment.
+        // When gassing, reduce alignment force so engine torque (wheelie) can overcome it —
+        // this lets the car tilt back on steep uphills instead of being glued to the slope.
+        let alignForce = this.slopeAlign;
+        if (gas && this.fuel > 0) alignForce *= 0.4;  // 60% weaker when gassing → can wheelie
+        if (brake && this.fuel > 0) alignForce *= 0.6;
+        let diff = targetAngle - this.angle;
+        // Normalize to [-PI, PI]
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        this.angle += diff * alignForce * inertiaFactor * dts;
+      } else {
+        // Upside down on ground — no slope correction, let flip timer run
+        this.angVel *= 0.95;
+      }
+    } else {
+      // Airborne — no slope correction
+    }
+
+    // Clamp fuel
+    if (this.fuel < 0) this.fuel = 0;
+
+    // ── Death: driver's head touches the ground (like HCR1 — "neck snap") ──
+    // The driver head is positioned in the cabin, which sits on top of the body.
+    // In car-local coordinates: headY ≈ -(bodyHeight + cabinHeight/2) above the car center.
+    // When the car rotates, the head swings in an arc. If the head's world Y
+    // drops to/below the terrain height at the head's world X → death.
+    // This naturally handles:
+    //   - Wheelies (40° tilt): head is high up, far from ground → safe
+    //   - Full flip (180°): head swings below car center → touches ground → dead
+    //   - Bad landing (steep nose-dive): head swings forward+down → touches ground → dead
+    //   - Looping in air: head swings around but terrain is far below → safe
+    {
+      const v = this.visual;
+      // Head offset in car-local coords (same as draw code)
+      const bw = v.bodyWidth, bh = v.bodyHeight;
+      const by = -(bh - 4);
+      const ch = v.cabinHeight;
+      const cy = by - ch + 2;
+      const headLocalY = cy + ch / 2;           // head center Y in car-local space
+      const headLocalX = v.cabinOffset + v.cabinWidth / 2 - 3;  // head center X
+      // Rotate to world space
+      const cosA = Math.cos(this.angle);
+      const sinA = Math.sin(this.angle);
+      const headWX = this.x + headLocalX * cosA - headLocalY * sinA;
+      const headWY = this.y + headLocalX * sinA + headLocalY * cosA;
+      // Terrain height at head's world X
+      const groundAtHead = terrain.groundAt(headWX);
+      // Death when head touches ground (with small padding so it triggers reliably
+      // at full flip — the head is a small circle, not a point)
+      if (headWY + HEAD_DEATH_PAD >= groundAtHead) {
+        this.dead = true;
+      }
+    }
+
+  }
+
+  draw(ctx, camX, camY) {
+    const sx = this.x - camX;
+    const sy = this.y - camY;
+
+    // ── Wheels (drawn first, behind body) with suspension compression ──
+    const fwdX = Math.cos(this.angle);
+    const fwdY = Math.sin(this.angle);
+    const perpX = -fwdY;
+    const perpY = fwdX;
+    const halfWB = this.wheelBase / 2;
+    const wy = this.wheelOffset;
+
+    for (const sign of [-1, 1]) {
+      // Apply spring compression to wheel position (pushed up = compressed)
+      const springComp = sign === -1 ? this.springL : this.springR;
+      const suspOffset = wy - springComp; // wheel moves up when spring compresses
+      const wx = this.x + fwdX * (halfWB * sign) + perpX * suspOffset;
+      const wyy = this.y + fwdY * (halfWB * sign) + perpY * suspOffset;
+      ctx.save();
+      ctx.translate(wx - camX, wyy - camY);
+      ctx.rotate(this.angle);
+
+      // Tire (dark rubber with slight texture)
+      ctx.fillStyle = "#1a1a1a";
+      ctx.strokeStyle = "#333";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, this.wheelRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Tread marks around tire
+      ctx.strokeStyle = "#2a2a2a";
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4;
+        const r = this.wheelRadius - 2;
+        const r2 = this.wheelRadius - 6;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+        ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+        ctx.stroke();
+      }
+
+      // Hubcap (silver)
+      ctx.fillStyle = "#bdc3c7";
+      ctx.beginPath();
+      ctx.arc(0, 0, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#95a5a6";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Spokes (rotate with accumulated wheel spin — both wheels same direction)
+      ctx.strokeStyle = "#7f8c8d";
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 5; i++) {
+        const a = this.wheelSpin + (i * Math.PI * 2) / 5;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a) * 8, Math.sin(a) * 8);
+        ctx.stroke();
+      }
+
+      // Center cap
+      ctx.fillStyle = "#ecf0f1";
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // ── Car body (drawn after wheels) — parametrized via this.visual ──
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(this.angle);
+
+    const v = this.visual;
+    const bw = v.bodyWidth, bh = v.bodyHeight;
+    const bx = -bw / 2, by = -(bh - 4);  // body top-left
+    const cw = v.cabinWidth, ch = v.cabinHeight;
+    const cx = v.cabinOffset, cy = by - ch + 2;  // cabin sits on top of body
+
+    // Suspension arms (connecting wheels to body) — scale with wheelBase
+    ctx.strokeStyle = "#555";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    const armInner = this.wheelBase * 0.35;
+    const armOuter = this.wheelBase * 0.5;
+    for (const sign of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(sign * armInner, 0);
+      ctx.lineTo(sign * armOuter, this.wheelOffset - 4);
+      ctx.stroke();
+    }
+
+    // Main body chassis with gradient
+    const bodyGrad = ctx.createLinearGradient(0, by, 0, by + bh);
+    bodyGrad.addColorStop(0, v.bodyColor);
+    bodyGrad.addColorStop(1, v.bodyDark);
+    ctx.fillStyle = bodyGrad;
+    ctx.strokeStyle = v.bodyStroke;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, bw, bh, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    // Skid plate (darker, lower body)
+    if (v.hasSkidPlate) {
+      ctx.fillStyle = "#7f8c8d";
+      ctx.beginPath();
+      ctx.roundRect(bx + 2, by + bh - 6, bw - 4, 6, 3);
+      ctx.fill();
+    }
+
+    // Hood (front, sloped) — only for vehicles with hoodSlope
+    if (v.hoodSlope) {
+      ctx.fillStyle = v.bodyDark;
+      ctx.beginPath();
+      ctx.moveTo(bw / 2 - 20, by);
+      ctx.lineTo(bw / 2, by);
+      ctx.lineTo(bw / 2 + 2, by - 8);
+      ctx.lineTo(bw / 2 - 18, by - 8);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Cabin (darker, rounded)
+    const cabinGrad = ctx.createLinearGradient(0, cy, 0, cy + ch);
+    cabinGrad.addColorStop(0, v.cabinColor);
+    cabinGrad.addColorStop(1, v.cabinDark);
+    ctx.fillStyle = cabinGrad;
+    ctx.beginPath();
+    ctx.roundRect(cx, cy, cw, ch, 6);
+    ctx.fill();
+
+    // Windshield (tinted blue)
+    const winGrad = ctx.createLinearGradient(0, cy + 2, 0, cy + ch - 6);
+    winGrad.addColorStop(0, "#85c1e9");
+    winGrad.addColorStop(1, "#5dade2");
+    ctx.fillStyle = winGrad;
+    ctx.beginPath();
+    ctx.roundRect(cx + 4, cy + 3, cw * 0.42, ch - 6, 3);
+    ctx.fill();
+
+    // Side window
+    ctx.fillStyle = "#aed6f1";
+    ctx.beginPath();
+    ctx.roundRect(cx + cw * 0.5, cy + 3, cw * 0.4, ch - 6, 3);
+    ctx.fill();
+
+    // Roll bar (behind cabin)
+    if (v.hasRollBar) {
+      ctx.strokeStyle = "#555";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx, by);
+      ctx.stroke();
+    }
+
+    // Driver head with helmet — positioned at cabin center
+    const drvX = cx + cw / 2 - 3;
+    const drvY = cy + ch / 2;
+    const headR = Math.min(6, ch * 0.3);
+    ctx.fillStyle = "#f9e79f";
+    ctx.beginPath();
+    ctx.arc(drvX, drvY, headR, 0, Math.PI * 2);
+    ctx.fill();
+    // Helmet
+    ctx.fillStyle = v.driverHelmetColor;
+    ctx.beginPath();
+    ctx.arc(drvX, drvY - 2, headR + 1, Math.PI, 0);
+    ctx.fill();
+    // Helmet visor
+    ctx.fillStyle = "#2c3e50";
+    ctx.fillRect(drvX, drvY - 3, 6, 3);
+
+    // Headlight (front)
+    ctx.fillStyle = "#fffacd";
+    ctx.beginPath();
+    ctx.arc(bw / 2 - 2, by + 8, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#f39c12";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Taillight (back)
+    ctx.fillStyle = "#e74c3c";
+    ctx.beginPath();
+    ctx.arc(-(bw / 2 - 2), by + 8, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#c0392b";
+    ctx.stroke();
+
+    // Exhaust pipe (back)
+    if (v.hasExhaust) {
+      ctx.fillStyle = "#7f8c8d";
+      ctx.fillRect(-(bw / 2 + 4), by + 12, 6, 4);
+    }
+
+    // Side detail line
+    ctx.strokeStyle = v.bodyDark;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bx + 5, by + 12);
+    ctx.lineTo(bw / 2 - 5, by + 12);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
+
+// ── Coins ──
+class CoinSystem {
+  constructor() { this.coins = []; this.collected = 0; this.nextSpawnX = 300; }
+
+  update(camX, terrain, carX) {
+    // Use carX (not camX) for spawn frontier — camX lags behind the car,
+    // so camX + VIEW_AHEAD may be beyond generated terrain, causing
+    // groundAt() to return stale/wrong heights → coins spawn underground.
+    const spawnFrontier = Math.max(camX, carX) + VIEW_AHEAD;
+    while (this.nextSpawnX < spawnFrontier) {
+      // Check if inside a coinfield zone — dense coins
+      const zone = zoneAt(this.nextSpawnX);
+      const inCoinfield = zone && zone.type === "coinfield";
+      const gap = inCoinfield
+        ? 80 + Math.random() * 60   // dense: 80-140px between coins
+        : COIN_GAP_MIN + Math.random() * (COIN_GAP_MAX - COIN_GAP_MIN);
+      this.nextSpawnX += gap;
+      // Ensure terrain is generated at spawn position before querying height
+      terrain.update(this.nextSpawnX);
+      // Place coin slightly above terrain
+      const gy = terrain.groundAt(this.nextSpawnX);
+      this.coins.push({
+        x: this.nextSpawnX,
+        y: gy - 50 - Math.random() * 40,
+        collected: false,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+    // Remove collected/old — in-place removal (no new array per frame)
+    let w = 0;
+    for (let r = 0; r < this.coins.length; r++) {
+      const c = this.coins[r];
+      if (c.collected || c.x <= camX - VIEW_BEHIND) continue;
+      this.coins[w++] = c;
+    }
+    this.coins.length = w;
+  }
+
+  checkCollect(car) {
+    for (const c of this.coins) {
+      if (c.collected) continue;
+      const dx = c.x - car.x;
+      const dy = c.y - car.y;
+      if (dx * dx + dy * dy < COIN_PICKUP_DIST_SQ) {
+        c.collected = true;
+        this.collected++;
+        sfx.coin();
+      }
+    }
+  }
+
+  draw(ctx, camX, camY, time) {
+    for (const c of this.coins) {
+      if (c.collected) continue;
+      const sx = c.x - camX;
+      const sy = c.y - camY + Math.sin(time * 3 + c.phase) * 5;
+      ctx.fillStyle = "#f1c40f";
+      ctx.strokeStyle = "#f39c12";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#f39c12";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("$", sx, sy);
+    }
+  }
+}
+
+// ── Fuel cans ──
+class FuelSystem {
+  constructor() { this.cans = []; this.nextSpawnX = 800; }
+
+  update(camX, terrain, carX) {
+    // Use carX (not camX) for spawn frontier — camX lags behind the car,
+    // so camX + VIEW_AHEAD may be beyond generated terrain, causing
+    // groundAt() to return stale/wrong heights → fuels spawn underground.
+    const spawnFrontier = Math.max(camX, carX) + VIEW_AHEAD;
+    while (this.nextSpawnX < spawnFrontier) {
+      const gap = FUEL_GAP_MIN + Math.random() * (FUEL_GAP_MAX - FUEL_GAP_MIN);
+      this.nextSpawnX += gap;
+      // Ensure terrain is generated at spawn position before querying height
+      terrain.update(this.nextSpawnX);
+      const gy = terrain.groundAt(this.nextSpawnX);
+      this.cans.push({ x: this.nextSpawnX, y: gy - 30, collected: false });
+    }
+    // Remove collected/old — in-place removal (no new array per frame)
+    let w = 0;
+    for (let r = 0; r < this.cans.length; r++) {
+      const c = this.cans[r];
+      if (c.collected || c.x <= camX - VIEW_BEHIND) continue;
+      this.cans[w++] = c;
+    }
+    this.cans.length = w;
+  }
+
+  checkCollect(car) {
+    for (const c of this.cans) {
+      if (c.collected) continue;
+      const dx = c.x - car.x;
+      const dy = c.y - car.y;
+      if (dx * dx + dy * dy < FUEL_PICKUP_DIST_SQ) {
+        c.collected = true;
+        car.fuel = Math.min(car.maxFuel, car.fuel + car.maxFuel * FUEL_REFILL_PCT);
+        sfx.fuel();
+      }
+    }
+  }
+
+  draw(ctx, camX, camY) {
+    for (const c of this.cans) {
+      if (c.collected) continue;
+      const sx = c.x - camX;
+      const sy = c.y - camY;
+      // Can body
+      ctx.fillStyle = "#e67e22";
+      ctx.strokeStyle = "#d35400";
+      ctx.lineWidth = 2;
+      ctx.fillRect(sx - 14, sy - 20, 28, 36);
+      ctx.strokeRect(sx - 14, sy - 20, 28, 36);
+      // Cap
+      ctx.fillStyle = "#d35400";
+      ctx.fillRect(sx - 6, sy - 26, 12, 6);
+      // Label
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 16px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("⛽", sx, sy - 2);
+    }
+  }
+}
+
+// ── Clouds (parallax) ──
+class Clouds {
+  constructor() {
+    this.clouds = [];
+    for (let i = 0; i < 12; i++) {
+      this.clouds.push({
+        x: i * 350 + Math.random() * 200,
+        y: 40 + Math.random() * 140,
+        size: 40 + Math.random() * 50,
+        speed: 0.15 + Math.random() * 0.15,
+      });
+    }
+  }
+  draw(ctx, camX) {
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    for (const c of this.clouds) {
+      const sx = c.x - camX * c.speed;
+      // Wrap
+      const wrappedX = ((sx % (W + 300)) + W + 300) % (W + 300) - 150;
+      ctx.beginPath();
+      ctx.arc(wrappedX, c.y, c.size, 0, Math.PI * 2);
+      ctx.arc(wrappedX + c.size * 0.6, c.y + 10, c.size * 0.7, 0, Math.PI * 2);
+      ctx.arc(wrappedX - c.size * 0.6, c.y + 10, c.size * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// ── Game State ──
+let terrain, car, coins, fuels, clouds;
+let camX = 0, camY = 0;
+let distance = 0;
+let level = 1;
+let lastTime = 0;
+let gameTime = 0;
+
+// ── Run tracking (for end-of-run elevation profile) ──
+let runTrack = [];     // sampled terrain heights: {x, y, level}
+let runPickups = [];    // coin/fuel pickup positions: {x, y, type}
+let runCrashX = 0;      // where the run ended
+const TRACK_SAMPLE_INTERVAL = 50; // sample terrain every 50 world units (~5m)
+
+// ── Surface/Weather emoji helpers for HUD badges ──
+function surfEmoji(name) {
+  return { grass: "🛣️", mud: "🟤", sand: "🏜️", gravel: "🪨" }[name] || "🛣️";
+}
+function weatherEmoji(name) {
+  return { sunny: "☀️", night: "🌙", rain: "🌧️", snow: "🌨️", fog: "🌫️" }[name] || "☀️";
+}
+
+// Blend two hex colors (#RRGGBB) by factor t (0 = color0, 1 = color1)
+function blendColor(c0, c1, t) {
+  if (t <= 0) return c0;
+  if (t >= 1) return c1;
+  const r0 = parseInt(c0.slice(1, 3), 16);
+  const g0 = parseInt(c0.slice(3, 5), 16);
+  const b0 = parseInt(c0.slice(5, 7), 16);
+  const r1 = parseInt(c1.slice(1, 3), 16);
+  const g1 = parseInt(c1.slice(3, 5), 16);
+  const b1 = parseInt(c1.slice(5, 7), 16);
+  const r = Math.round(r0 + (r1 - r0) * t);
+  const g = Math.round(g0 + (g1 - g0) * t);
+  const b = Math.round(b0 + (b1 - b0) * t);
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+
+function initGame() {
+  // New random terrain per run
+  resetTerrain();
+  terrain = new Terrain();
+  car = new Car(100, BASE_Y - 100);
+  coins = new CoinSystem();
+  fuels = new FuelSystem();
+  clouds = new Clouds();
+  camX = 0;
+  camY = 0;
+  distance = 0;
+  level = 1;
+  gameTime = 0;
+  runTrack = [];
+  runPickups = [];
+  runCrashX = 0;
+  // Reset adaptive quality state for the new run
+  frameCount = 0;
+  fpsSamples = [];
+  qualityHighStreak = 0;
+  lastTime = performance.now();
+  requestAnimationFrame(loop);
+}
+
+// ── Main Loop ──
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.033);
+  lastTime = now;
+
+  if (!car.dead) {
+    gameTime += dt;
+    qualitySample(dt);
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  } else {
+    gameOver();
+  }
+}
+
+function update(dt) {
+  terrain.update(car.x);
+  car.update(dt, terrain, input);
+  sfx.updateEngine(car.vx, car.onGround);
+  coins.update(camX, terrain, car.x);
+  fuels.update(camX, terrain, car.x);
+
+  // ── Track terrain height for end-of-run profile ──
+  const trackX = car.x - (car.x % TRACK_SAMPLE_INTERVAL);
+  if (runTrack.length === 0 || trackX > runTrack[runTrack.length - 1].x) {
+    runTrack.push({ x: trackX, y: terrain.groundAt(trackX), level: level });
+  }
+
+  // Record pickups for the profile (before checkCollect removes them)
+  // We hook into the collection by checking what gets collected this frame
+  const preCoins = coins.collected;
+  const preFuel = car.fuel;
+  coins.checkCollect(car);
+  fuels.checkCollect(car);
+  if (coins.collected > preCoins) {
+    runPickups.push({ x: car.x, y: car.y, type: "coin" });
+  }
+  if (car.fuel > preFuel) {
+    runPickups.push({ x: car.x, y: car.y, type: "fuel" });
+  }
+
+  // Camera follows car — car centered on screen (both X and Y)
+  const targetCamX = car.x - W * 0.5;
+  const targetCamY = car.y - H * 0.5;
+  camX += (targetCamX - camX) * CAM_LERP_X;
+  camY += (targetCamY - camY) * CAM_LERP_Y;
+
+  distance = Math.max(distance, Math.floor(car.x / 10));
+
+  // ── Looping bonus: 360° rotation in air → bonus coins ──
+  if (car.loopCompleted) {
+    coins.collected += LOOPING_BONUS;
+    showLevelUp(0, LOOPING_BONUS);  // reuse popup with level=0 to signal "Looping!"
+    sfx.levelUp();
+    car.airSpin = 0;                // reset so consecutive loops count
+    car.loopCompleted = false;
+  }
+
+  // ── Level-Up every 1000m ──
+  const newLevel = 1 + Math.floor(distance / 1000);
+  if (newLevel > level) {
+    const bonus = (newLevel - level) * 10 * newLevel; // cumulative bonus for skipped levels
+    level = newLevel;
+    coins.collected += bonus;
+    showLevelUp(level, bonus);
+    sfx.levelUp();
+  }
+
+  // Update HUD
+  document.getElementById("dist").textContent = distance;
+  document.getElementById("coins").textContent = coins.collected;
+  document.getElementById("fuel-bar-fill").style.width = (car.fuel / car.maxFuel * 100) + "%";
+  document.getElementById("level").textContent = level;
+
+  // Surface + Weather indicators (update only when changed — cheap DOM writes)
+  const surf = surfaceAt(car.x);
+  if (surf._lastBadge !== surf.name) {
+    document.getElementById("surface-badge").textContent = surfEmoji(surf.name);
+    surf._lastBadge = surf.name;
+  }
+  if (currentWeather && currentWeather._lastBadge !== currentWeather.name) {
+    document.getElementById("weather-badge").textContent = weatherEmoji(currentWeather.name);
+    currentWeather._lastBadge = currentWeather.name;
+  }
+
+  // Check game over conditions
+  if (car.fuel <= 0 && Math.abs(car.vx) < 0.3) {
+    car.dead = true;
+  }
+}
+
+function showLevelUp(lvl, bonus) {
+  const el = document.getElementById("levelup");
+  el.textContent = lvl === 0
+    ? `🔄 Looping!  +${bonus} Taler`
+    : `⭐ Level ${lvl}!  +${bonus} Taler`;
+  el.classList.remove("show");
+  void el.offsetWidth; // force reflow to restart animation
+  el.classList.add("show");
+}
+
+function render() {
+  const w = currentWeather || WEATHER_TYPES.sunny;
+
+  // Sky gradient (weather-dependent)
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, w.skyTop);
+  grad.addColorStop(0.6, w.skyMid);
+  grad.addColorStop(1, w.skyBot);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars at night
+  if (w.dark) {
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    for (let i = 0; i < 40; i++) {
+      const sx = (i * 137.5 + camX * 0.02) % W;
+      const sy = (i * 73.3) % (H * 0.5);
+      ctx.fillRect(sx, sy, 2, 2);
+    }
+  }
+
+  // Clouds (drawn BEFORE hills so they appear behind them) — hide at night
+  if (!w.dark) clouds.draw(ctx, camX);
+
+  // Far hills (parallax background) — weather-dependent color
+  ctx.fillStyle = w.farHill;
+  ctx.beginPath();
+  const camXbg = camX * 0.3;
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 8) {
+    const wx = x + camXbg;
+    const y = BASE_Y + 100 + Math.sin(wx * 0.003) * 60 + Math.sin(wx * 0.007) * 30;
+    ctx.lineTo(x, y - camY * 0.3);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Mid hills — weather-dependent color
+  ctx.fillStyle = w.midHill;
+  ctx.beginPath();
+  const camXmid = camX * 0.6;
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 6) {
+    const wx = x + camXmid;
+    const y = BASE_Y + 50 + Math.sin(wx * 0.004 + 1) * 50 + Math.sin(wx * 0.009) * 25;
+    ctx.lineTo(x, y - camY * 0.6);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Terrain — surface-dependent dirt color
+  const pts = terrain.points;
+  const [tStart, tEnd] = terrain.visibleRange(camX, W);
+
+  // Draw terrain as filled polygon — always same dirt color (no hard transitions underground)
+  ctx.beginPath();
+  for (let i = tStart; i < tEnd; i++) {
+    const sx = pts[i].x - camX;
+    if (i === tStart) ctx.moveTo(sx, pts[i].y - camY);
+    else ctx.lineTo(sx, pts[i].y - camY);
+  }
+  ctx.lineTo(W + 50, H + 100);
+  ctx.lineTo(-50, H + 100);
+  ctx.closePath();
+  ctx.fillStyle = "#7B5B3B";  // uniform dirt — no surface-dependent underground color
+  ctx.fill();
+
+  // Grass/surface layer on top of terrain — per-point color with smooth blending
+  // at surface transitions. We draw each segment with a color interpolated between
+  // the current and next surface over a ~100px blend zone.
+  for (let i = tStart; i < tEnd - 1; i++) {
+    const x0 = pts[i].x;
+    const x1 = pts[i + 1].x;
+    const surf0 = surfaceAt(x0);
+    // Find the nearest surface boundary ahead within 100px
+    let blend = 0;  // 0 = surf0, 1 = nextSurface
+    let nextSurf = surf0;
+    // Check if we're near a surface boundary
+    for (const region of surfaceRegions) {
+      if (region.startX > x0 && region.startX < x0 + 100) {
+        const dist = region.startX - x0;
+        blend = 1 - dist / 100;  // closer to boundary = more blend
+        nextSurf = SURFACES[region.surface] || SURFACES.grass;
+        break;
+      }
+    }
+    // Interpolate grass color
+    const c0 = surf0.grassColor;
+    const c1 = nextSurf.grassColor;
+    const grassCol = blendColor(c0, c1, blend);
+    const cd0 = surf0.grassDark;
+    const cd1 = nextSurf.grassDark;
+    const darkCol = blendColor(cd0, cd1, blend);
+
+    ctx.beginPath();
+    ctx.moveTo(pts[i].x - camX, pts[i].y - camY);
+    ctx.lineTo(pts[i + 1].x - camX, pts[i + 1].y - camY);
+    ctx.strokeStyle = grassCol;
+    ctx.lineWidth = 8;
+    ctx.lineJoin = "round";
+    ctx.stroke();
+    ctx.strokeStyle = darkCol;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  }
+
+  // ── Weather particles ──
+  if (w.rain) {
+    ctx.strokeStyle = "rgba(180,200,220,0.5)";
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 60; i++) {
+      const rx = ((i * 47.3 + gameTime * 400) % (W + 100)) - 50;
+      const ry = ((i * 89.7 + gameTime * 800) % (H + 100)) - 50;
+      ctx.beginPath();
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx - 3, ry + 12);
+      ctx.stroke();
+    }
+  }
+  if (w.snow) {
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    for (let i = 0; i < 50; i++) {
+      const sx = ((i * 53.7 + gameTime * 60 + Math.sin(gameTime + i) * 20) % (W + 100)) - 50;
+      const sy = ((i * 91.3 + gameTime * 120) % (H + 100)) - 50;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (w.fog > 0) {
+    // Fog circle around the car — visibility radius
+    const carSx = car ? car.x - camX : W / 2;
+    const carSy = car ? car.y - camY : H / 2;
+    const fogGrad = ctx.createRadialGradient(carSx, carSy, w.fog * 0.5, carSx, carSy, w.fog * 1.5);
+    fogGrad.addColorStop(0, "rgba(220,220,220,0)");
+    fogGrad.addColorStop(1, "rgba(220,220,220,0.85)");
+    ctx.fillStyle = fogGrad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Coins & fuel
+  coins.draw(ctx, camX, camY, gameTime);
+  fuels.draw(ctx, camX, camY);
+
+  // Car (with headlight glow at night)
+  if (w.dark && car) {
+    // Headlight cone
+    const sx = car.x - camX;
+    const sy = car.y - camY;
+    const fwdX = Math.cos(car.angle);
+    const fwdY = Math.sin(car.angle);
+    const lightGrad = ctx.createRadialGradient(
+      sx + fwdX * 40, sy + fwdY * 10, 10,
+      sx + fwdX * 120, sy + fwdY * 40, 120
+    );
+    lightGrad.addColorStop(0, "rgba(255,250,200,0.35)");
+    lightGrad.addColorStop(1, "rgba(255,250,200,0)");
+    ctx.fillStyle = lightGrad;
+    ctx.beginPath();
+    ctx.arc(sx + fwdX * 80, sy + fwdY * 25, 100, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  car.draw(ctx, camX, camY);
+}
+
+function gameOver() {
+  sfx.crash();
+  runCrashX = car.x;
+
+  // Persist run results
+  saveData.wallet += coins.collected;
+  if (distance > saveData.best.distance) saveData.best.distance = distance;
+  if (level > saveData.best.level) saveData.best.level = level;
+  if (coins.collected > saveData.best.coins) saveData.best.coins = coins.collected;
+  saveSave();
+
+  // ── Render elevation profile ──
+  drawRunProfile();
+
+  // ── Stats below profile ──
+  const coinPickups = runPickups.filter(p => p.type === "coin").length;
+  const fuelPickups = runPickups.filter(p => p.type === "fuel").length;
+  const statsEl = document.getElementById("profile-stats");
+  statsEl.innerHTML = `
+    <div class="row">
+      <span class="stat">📏 <b>${distance} m</b></span>
+      <span class="stat">⭐ Lvl <b>${level}</b></span>
+      <span class="stat">🪙 <b>${coins.collected}</b></span>
+    </div>
+    <div class="row">
+      <span class="stat">🛞 ${coinPickups}× Münzen</span>
+      <span class="stat">⛽ ${fuelPickups}× Tank</span>
+      <span class="stat">💰 Konto: <b>${saveData.wallet}</b></span>
+    </div>
+  `;
+  document.getElementById("gameover").classList.remove("hide");
+}
+
+function drawRunProfile() {
+  const cv = document.getElementById("profile-canvas");
+  const dpr = window.devicePixelRatio || 1;
+  const cw = Math.min(440, window.innerWidth - 60);
+  // Scale canvas height with distance so the profile stays readable on long runs
+  const distMeters = Math.max(distance, 100);
+  const ch = Math.min(280, 140 + Math.floor(distMeters / 1000) * 24);
+  cv.width = cw * dpr;
+  cv.height = ch * dpr;
+  cv.style.width = cw + "px";
+  cv.style.height = ch + "px";
+  const c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const padL = 36, padR = 12, padT = 14, padB = 22;
+  const plotW = cw - padL - padR;
+  const plotH = ch - padT - padB;
+
+  // World → screen mapping
+  // Game Y: small=y=high terrain (up on screen), large y=low terrain (down).
+  // Chart: small game-Y (peak) must map to TOP, large game-Y (valley) to BOTTOM.
+  const maxX = Math.max(runCrashX, 100);
+  // Compute yMin/yMax via loop (not spread — runTrack can exceed 1000 entries on long runs)
+  let yMin = Infinity, yMax = -Infinity;
+  for (const t of runTrack) {
+    if (t.y < yMin) yMin = t.y;
+    if (t.y > yMax) yMax = t.y;
+  }
+  yMin -= 30;
+  yMax += 30;
+  const yRange = Math.max(yMax - yMin, 50);
+  const toX = (wx) => padL + (wx / maxX) * plotW;
+  // Flip: small game-Y (peak) → top of chart, large game-Y (valley) → bottom
+  const toY = (wy) => padT + ((wy - yMin) / yRange) * plotH;
+
+  // ── Background ──
+  c.fillStyle = "rgba(0,0,0,0.25)";
+  c.fillRect(padL, padT, plotW, plotH);
+
+  // ── Grid lines (every 1000m) ──
+  c.strokeStyle = "rgba(255,255,255,0.08)";
+  c.lineWidth = 1;
+  c.fillStyle = "rgba(255,255,255,0.4)";
+  c.font = "9px sans-serif";
+  c.textAlign = "center";
+  for (let m = 0; m <= maxX / 10; m += 1000) {
+    const wx = m * 10;
+    const sx = toX(wx);
+    c.beginPath();
+    c.moveTo(sx, padT);
+    c.lineTo(sx, padT + plotH);
+    c.stroke();
+    if (m > 0 && m < maxX / 10) {
+      c.fillText(m + "m", sx, ch - 6);
+    }
+  }
+
+  // ── Level boundary markers (vertical dashed lines) ──
+  c.strokeStyle = "rgba(255,215,0,0.25)";
+  c.setLineDash([3, 3]);
+  for (let lvl = 1; lvl <= level; lvl++) {
+    const boundaryX = lvl * 10000;
+    if (boundaryX > 0 && boundaryX < maxX) {
+      const sx = toX(boundaryX);
+      c.beginPath();
+      c.moveTo(sx, padT);
+      c.lineTo(sx, padT + plotH);
+      c.stroke();
+    }
+  }
+  c.setLineDash([]);
+
+  // ── Terrain fill (gradient: brown earth → green grass top) ──
+  if (runTrack.length > 1) {
+    c.beginPath();
+    c.moveTo(toX(runTrack[0].x), padT + plotH);
+    for (const t of runTrack) {
+      c.lineTo(toX(t.x), toY(t.y));
+    }
+    c.lineTo(toX(runTrack[runTrack.length - 1].x), padT + plotH);
+    c.closePath();
+    const terrainGrad = c.createLinearGradient(0, padT, 0, padT + plotH);
+    terrainGrad.addColorStop(0, "rgba(76,175,80,0.35)");
+    terrainGrad.addColorStop(0.15, "rgba(139,111,71,0.3)");
+    terrainGrad.addColorStop(1, "rgba(40,30,20,0.5)");
+    c.fillStyle = terrainGrad;
+    c.fill();
+
+    // Terrain outline (grass-green stroke on top)
+    c.beginPath();
+    for (let i = 0; i < runTrack.length; i++) {
+      const t = runTrack[i];
+      const sx = toX(t.x), sy = toY(t.y);
+      if (i === 0) c.moveTo(sx, sy);
+      else c.lineTo(sx, sy);
+    }
+    c.strokeStyle = "#4CAF50";
+    c.lineWidth = 2;
+    c.lineJoin = "round";
+    c.stroke();
+  }
+
+  // ── Pickup markers ──
+  for (const p of runPickups) {
+    if (p.x > maxX) continue;
+    const sx = toX(p.x);
+    const sy = toY(p.y);
+    if (p.type === "coin") {
+      c.fillStyle = "#f1c40f";
+      c.beginPath();
+      c.arc(sx, sy, 2.5, 0, Math.PI * 2);
+      c.fill();
+    } else {
+      c.fillStyle = "#e67e22";
+      c.beginPath();
+      c.arc(sx, sy, 3.5, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = "#d35400";
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  }
+
+  // ── Crash site marker (red X) ──
+  if (runCrashX > 0 && runCrashX <= maxX) {
+    const sx = toX(runCrashX);
+    const groundY = toY(terrain.groundAt(runCrashX));
+    c.strokeStyle = "#ff4444";
+    c.lineWidth = 2.5;
+    c.lineCap = "round";
+    c.beginPath();
+    c.moveTo(sx - 5, groundY - 8);
+    c.lineTo(sx + 5, groundY + 2);
+    c.moveTo(sx + 5, groundY - 8);
+    c.lineTo(sx - 5, groundY + 2);
+    c.stroke();
+    // Label
+    c.fillStyle = "#ff4444";
+    c.font = "bold 9px sans-serif";
+    c.textAlign = "center";
+    c.fillText("💥", sx, groundY - 12);
+  }
+
+  // ── Y-axis labels (height in m) ──
+  // Game Y: small=peak (top of chart), large=valley (bottom). Height = (BASE_Y - gameY)/10.
+  c.fillStyle = "rgba(255,255,255,0.35)";
+  c.font = "8px sans-serif";
+  c.textAlign = "right";
+  const yMid = (yMin + yMax) / 2;
+  const heightTop = ((BASE_Y - yMin) / 10).toFixed(0);   // yMin = peak = top
+  const heightMid = ((BASE_Y - yMid) / 10).toFixed(0);
+  const heightBot = ((BASE_Y - yMax) / 10).toFixed(0);    // yMax = valley = bottom
+  c.fillText(heightTop + "m", padL - 4, padT + 4);
+  c.fillText(heightMid + "m", padL - 4, padT + plotH / 2 + 3);
+  c.fillText(heightBot + "m", padL - 4, padT + plotH - 2);
+}
+
+// ── Input ──
+// Keyboard and touch are independent sources — releasing one must not kill the other.
+// We track them separately and OR them into the final input state each frame.
+const keyInput = { gas: false, brake: false };
+const touchInput = { gas: false, brake: false };
+const input = { gas: false, brake: false };
+
+function syncInput() {
+  input.gas = keyInput.gas || touchInput.gas;
+  input.brake = keyInput.brake || touchInput.brake;
+}
+
+// Keyboard
+document.addEventListener("keydown", (e) => {
+  if (e.code === "ArrowRight" || e.code === "KeyD") { keyInput.gas = true; syncInput(); }
+  if (e.code === "ArrowLeft" || e.code === "KeyA") { keyInput.brake = true; syncInput(); }
+});
+document.addEventListener("keyup", (e) => {
+  if (e.code === "ArrowRight" || e.code === "KeyD") { keyInput.gas = false; syncInput(); }
+  if (e.code === "ArrowLeft" || e.code === "KeyA") { keyInput.brake = false; syncInput(); }
+});
+
+// Touch / mouse buttons
+function bindButtons() {
+  const gasEl = document.getElementById("btn-gas");
+  const brakeEl = document.getElementById("btn-brake");
+
+  function press(el, prop) {
+    if (!el) return;
+    el.addEventListener("pointerdown", (e) => { e.preventDefault(); touchInput[prop] = true; syncInput(); });
+    el.addEventListener("pointerup", (e) => { e.preventDefault(); touchInput[prop] = false; syncInput(); });
+    el.addEventListener("pointerleave", () => { touchInput[prop] = false; syncInput(); });
+    el.addEventListener("pointercancel", () => { touchInput[prop] = false; syncInput(); });
+  }
+  press(gasEl, "gas");
+  press(brakeEl, "brake");
+}
+
+// ── Start / Restart / Menu Flow ──
+
+function showStartScreen() {
+  document.getElementById("player-name").textContent = saveData.name || "Fahrer";
+  document.getElementById("wallet-coins").textContent = saveData.wallet;
+  document.getElementById("best-dist").textContent = saveData.best.distance;
+  document.getElementById("best-level").textContent = saveData.best.level;
+  document.getElementById("start").classList.remove("hide");
+}
+
+// Name input
+document.getElementById("name-btn").addEventListener("click", () => {
+  const name = document.getElementById("name-field").value.trim() || "Fahrer";
+  saveData.name = name;
+  saveSave();
+  sfx.init();
+  document.getElementById("nameinput").classList.add("hide");
+  showStartScreen();
+});
+
+document.getElementById("name-field").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("name-btn").click();
+});
+
+// Start game
+document.getElementById("start-btn").addEventListener("click", () => {
+  document.getElementById("start").classList.add("hide");
+  sfx.init();
+  initGame();
+});
+
+// Restart
+document.getElementById("restart-btn").addEventListener("click", () => {
+  document.getElementById("gameover").classList.add("hide");
+  sfx.init();
+  initGame();
+});
+
+// Menu (back to start from game over)
+document.getElementById("menu-btn").addEventListener("click", () => {
+  document.getElementById("gameover").classList.add("hide");
+  showStartScreen();
+});
+
+// Garage
+document.getElementById("garage-btn").addEventListener("click", () => {
+  document.getElementById("start").classList.add("hide");
+  renderGarage();
+  document.getElementById("garage").classList.remove("hide");
+});
+
+document.getElementById("garage-back").addEventListener("click", () => {
+  document.getElementById("garage").classList.add("hide");
+  showStartScreen();
+});
+
+function renderGarage() {
+  document.getElementById("garage-coins").textContent = `🪙 ${saveData.wallet}`;
+  const list = document.getElementById("upgrade-list");
+  list.innerHTML = "";
+
+  // ── Section 1: Vehicle Selection ──
+  const vehicleHeader = document.createElement("div");
+  vehicleHeader.className = "garage-section-header";
+  vehicleHeader.textContent = "🚗 FAHRZEUG WÄHLEN";
+  list.appendChild(vehicleHeader);
+
+  for (const [key, veh] of Object.entries(VEHICLES)) {
+    const isUnlocked = saveData.unlockedVehicles.includes(key);
+    const isSelected = saveData.vehicle === key;
+    const canAfford = saveData.wallet >= veh.unlockCost;
+    const canBuy = !isUnlocked && canAfford;
+
+    const card = document.createElement("div");
+    card.className = `upgrade-card vehicle-card ${isSelected ? "selected" : ""}`;
+
+    const stats = veh.base;
+    // Compute derived stats for display (Jeep = reference 50%)
+    const accel = stats.engineFwd / stats.mass;  // F/m — true acceleration
+    const stability = (stats.flipThreshold * 0.5 + (stats.mass / 2.5) * 0.3 + (stats.inertia / 7000) * 0.2);
+    const statBars = [
+      { label: "Beschl.", val: accel, max: 0.50, color: "#e74c3c" },
+      { label: "Haft.", val: stats.grip - 0.985, max: 0.012, color: "#3498db" },
+      { label: "Tank", val: stats.maxFuel, max: 140, color: "#f39c12" },
+      { label: "Stabil.", val: stability, max: 1.0, color: "#2ecc71" },
+    ];
+
+    const statLines = statBars.map(s => {
+      const pct = Math.min(100, (s.val / s.max) * 100);
+      return `<div class="stat-row"><span class="stat-label">${s.label}</span><div class="stat-bar"><div class="stat-fill" style="width:${pct}%;background:${s.color}"></div></div></div>`;
+    }).join("");
+
+    let actionHtml;
+    if (isSelected) {
+      actionHtml = `<button class="buy maxed">✓ AKTIV</button>`;
+    } else if (isUnlocked) {
+      actionHtml = `<button class="buy select-btn" data-vehicle="${key}">WÄHLEN</button>`;
+    } else if (canBuy) {
+      actionHtml = `<button class="buy unlock-btn" data-vehicle="${key}">🪙 ${veh.unlockCost}</button>`;
+    } else {
+      actionHtml = `<button class="buy" disabled>🪙 ${veh.unlockCost}</button>`;
+    }
+
+    card.innerHTML = `
+      <div class="info">
+        <div class="name">${veh.name}</div>
+        <div class="desc">${veh.desc}</div>
+        <div class="vehicle-stats">${statLines}</div>
+      </div>
+      ${actionHtml}
+    `;
+    list.appendChild(card);
+  }
+
+  // ── Section 2: Upgrades (for currently selected vehicle) ──
+  const upgradeHeader = document.createElement("div");
+  upgradeHeader.className = "garage-section-header";
+  upgradeHeader.textContent = `🔧 UPGRADES — ${VEHICLES[saveData.vehicle].name}`;
+  list.appendChild(upgradeHeader);
+
+  const vehUpgrades = saveData.upgrades[saveData.vehicle] || defaultVehicleUpgrades();
+
+  for (const [key, up] of Object.entries(UPGRADES)) {
+    const lvl = vehUpgrades[key];
+    const maxed = lvl >= up.maxLevel;
+    const cost = maxed ? 0 : up.costs[lvl];
+    const canAfford = saveData.wallet >= cost && !maxed;
+
+    const bars = "▮".repeat(lvl) + "▯".repeat(up.maxLevel - lvl);
+
+    const card = document.createElement("div");
+    card.className = "upgrade-card";
+    card.innerHTML = `
+      <div class="info">
+        <div class="name">${up.name}</div>
+        <div class="desc">${up.desc}</div>
+        <div class="bars">${bars}</div>
+      </div>
+      <button class="buy ${maxed ? "maxed" : ""}" ${!canAfford && !maxed ? "disabled" : ""} data-upgrade="${key}">
+        ${maxed ? "MAX" : `🪙 ${cost}`}
+      </button>
+    `;
+    list.appendChild(card);
+  }
+
+  // Bind vehicle select buttons
+  list.querySelectorAll(".select-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.vehicle;
+      if (!saveData.unlockedVehicles.includes(key)) return;
+      saveData.vehicle = key;
+      saveSave();
+      sfx.coin();
+      renderGarage();
+    });
+  });
+
+  // Bind vehicle unlock buttons
+  list.querySelectorAll(".unlock-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.vehicle;
+      const veh = VEHICLES[key];
+      if (saveData.unlockedVehicles.includes(key)) return;
+      if (saveData.wallet < veh.unlockCost) return;
+      saveData.wallet -= veh.unlockCost;
+      saveData.unlockedVehicles.push(key);
+      saveData.vehicle = key;  // auto-select newly unlocked vehicle
+      saveSave();
+      sfx.levelUp();
+      renderGarage();
+    });
+  });
+
+  // Bind upgrade buy buttons (per-vehicle)
+  list.querySelectorAll(".buy[data-upgrade]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.upgrade;
+      const up = UPGRADES[key];
+      const vu = saveData.upgrades[saveData.vehicle] || defaultVehicleUpgrades();
+      const lvl = vu[key];
+      if (lvl >= up.maxLevel) return;
+      const cost = up.costs[lvl];
+      if (saveData.wallet < cost) return;
+      saveData.wallet -= cost;
+      vu[key]++;
+      saveData.upgrades[saveData.vehicle] = vu;
+      saveSave();
+      sfx.coin();
+      renderGarage();
+    });
+  });
+}
+
+// ── Mute toggle ──
+document.getElementById("mute-badge").addEventListener("click", () => {
+  document.getElementById("mute-badge").textContent = sfx.toggleMute() ? "🔇" : "🔊";
+});
+
+// ── Fullscreen toggle ──
+// Android/Desktop: real Fullscreen API. iOS Safari: no API for elements,
+// but PWA meta tags allow "Add to Home Screen" → opens fullscreen automatically.
+// On iOS we detect standalone mode and hide the button (already fullscreen).
+const fsBadge = document.getElementById("fs-badge");
+// Hide button on iOS standalone (already fullscreen via PWA)
+if (window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches) {
+  fsBadge.style.display = "none";
+}
+fsBadge.addEventListener("click", () => {
+  const el = document.documentElement;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    fsBadge.textContent = "⬜";
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    fsBadge.textContent = "⛶";
+  }
+});
+document.addEventListener("fullscreenchange", () => {
+  fsBadge.textContent = document.fullscreenElement ? "⬜" : "⛶";
+});
+document.addEventListener("webkitfullscreenchange", () => {
+  fsBadge.textContent = document.webkitFullscreenElement ? "⬜" : "⛶";
+});
+
+// ── Boot: show name input or start screen ──
+document.getElementById("version-tag").textContent = VERSION;
+if (saveData.name) {
+  document.getElementById("nameinput").classList.add("hide");
+  showStartScreen();
+}
+
+bindButtons();

@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored third-party game code under public/games — not our source,
+    // ships as-is under its own upstream license, not subject to our lint rules.
+    "public/**",
   ]),
 ]);
 
