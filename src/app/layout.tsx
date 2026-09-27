@@ -38,6 +38,7 @@ export const metadata: Metadata = {
     "online game free",
   ],
   applicationName: "AR Game",
+  authors: [{ name: "Adi Romadhon", url: "https://adiirmd.id" }],
   icons: {
     icon: "/favicon.svg",
   },
@@ -85,6 +86,18 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       name: "AR Game",
       url: siteUrl,
       logo: `${siteUrl}/images/og-default.svg`,
+      founder: {
+        "@type": "Person",
+        name: "Adi Romadhon",
+        alternateName: "adiirmd",
+        url: "https://adiirmd.id",
+        sameAs: [
+          "https://github.com/adiirmd",
+          "https://link.adiirmd.id",
+          "https://www.linkedin.com/in/adi-romadhon-a925062b7/",
+          "https://medium.com/@adiirmd",
+        ],
+      },
     },
   ];
 
