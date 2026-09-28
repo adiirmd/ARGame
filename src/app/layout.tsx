@@ -1,18 +1,23 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bungee, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { getSiteUrl } from "@/lib/site";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Display face for headings and the logo: a single heavy arcade weight.
+const bungee = Bungee({
+  variable: "--font-display",
   subsets: ["latin"],
+  weight: "400",
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Body face: geometric, a little quirky, still comfortable at small sizes.
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-body",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const siteUrl = getSiteUrl();
@@ -104,12 +109,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${bungee.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-[#0b1020] text-slate-100">
+      <body className="flex min-h-full flex-col">
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-indigo-600 focus:px-4 focus:py-2 focus:text-white"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:nb focus:nb-sh focus:bg-[var(--yellow)] focus:px-4 focus:py-2 focus:font-display focus:text-sm focus:uppercase focus:text-[var(--ink)]"
         >
           Skip to content
         </a>

@@ -118,11 +118,13 @@ export default function GamePlayer({ game }: { game: Game }) {
     return (
       <div
         role="alert"
-        className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-center"
+        className="nb nb-sh flex aspect-video w-full flex-col items-center justify-center gap-2 bg-[var(--pink)] p-6 text-center"
       >
-        <p className="font-semibold text-red-300">
-          This game source is not on the approved list and cannot be
-          displayed.
+        <p className="font-display text-sm uppercase text-[var(--panel)] ink-edge">
+          Blocked source
+        </p>
+        <p className="max-w-sm text-sm text-[var(--ink)]/80">
+          This game source is not on the approved list and cannot be displayed.
         </p>
       </div>
     );
@@ -131,40 +133,56 @@ export default function GamePlayer({ game }: { game: Game }) {
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden rounded-2xl border border-white/10 bg-black"
+      className="nb nb-sh-lg relative w-full overflow-hidden bg-[var(--ink)]"
     >
       <div className="relative aspect-video w-full">
         {status === "loading" && (
           <div
             role="status"
             aria-live="polite"
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#0b1020]"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[var(--bg-deep)]"
           >
-            <div
-              aria-hidden="true"
-              className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-500/30 border-t-indigo-500 motion-reduce:animate-none"
-            />
-            <p className="text-sm text-slate-300">Loading {game.title}…</p>
+            {/* Three blinking blocks instead of a spinner: same signal, and it
+                matches the arcade language of the rest of the interface. */}
+            <div aria-hidden="true" className="flex gap-2">
+              {["var(--pink)", "var(--yellow)", "var(--cyan)"].map((c, i) => (
+                <span
+                  key={c}
+                  className="nb-2 h-5 w-5 animate-bounce motion-reduce:animate-none"
+                  style={{
+                    backgroundColor: c,
+                    animationDelay: `${i * 140}ms`,
+                    animationDuration: "900ms",
+                  }}
+                />
+              ))}
+            </div>
+            <p className="font-display text-xs uppercase tracking-wide text-[var(--panel)]">
+              Loading {game.title}
+            </p>
           </div>
         )}
 
         {status === "error" && (
           <div
             role="alert"
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[#0b1020] p-6 text-center"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-[var(--bg-deep)] p-6 text-center"
           >
-            <p className="font-semibold text-red-300">
-              We couldn&apos;t load this game.
+            <span aria-hidden="true" className="text-4xl">
+              🕹️
+            </span>
+            <p className="font-display text-sm uppercase text-[var(--pink)]">
+              Game over, it didn&apos;t load
             </p>
-            <p className="max-w-sm text-sm text-slate-400">
-              Please check your connection and try again.
+            <p className="max-w-sm text-sm text-[var(--panel)]/70">
+              Check your connection and give it another go.
             </p>
             <button
               type="button"
               onClick={retry}
-              className="rounded-full bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-500"
+              className="nb nb-sh nb-press bg-[var(--yellow)] px-5 py-2.5 font-display text-xs uppercase text-[var(--ink)]"
             >
-              Retry
+              Retry ▸
             </button>
           </div>
         )}
@@ -183,17 +201,19 @@ export default function GamePlayer({ game }: { game: Game }) {
         />
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 bg-[#0a0e1c] px-4 py-2 text-xs text-slate-400">
-        <span>
-          Controls: {game.controls ?? "See in-game instructions"} |
-          Orientation: {game.orientation ?? "any"}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t-[3px] border-[var(--ink)] bg-[var(--panel)] px-4 py-2.5">
+        <p className="min-w-0 text-xs leading-snug text-[var(--ink)]/70">
+          <span className="font-bold uppercase text-[var(--ink)]">
+            Controls:{" "}
+          </span>
+          {game.controls ?? "See in-game instructions"}
+        </p>
         <button
           type="button"
           onClick={toggleFullscreen}
-          className="rounded-full border border-white/15 px-3 py-1.5 font-medium text-slate-200 hover:bg-white/10"
+          className="nb-2 nb-sh-sm nb-press min-h-11 shrink-0 bg-[var(--cyan)] px-4 py-2 font-display text-[10px] uppercase text-[var(--ink)]"
         >
-          {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          {isFullscreen ? "Exit full" : "Fullscreen"}
         </button>
       </div>
     </div>

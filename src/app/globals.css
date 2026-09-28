@@ -1,19 +1,56 @@
 @import "tailwindcss";
 
+/*
+  AR Game design system: Playful Arcade with a light Neo Brutalist edge.
+
+  The idea is an arcade cabinet sticker sheet. Cream panels sit on a deep
+  violet background, every panel has a hard black outline and a solid
+  offset shadow with no blur, and colour does the shouting instead of
+  gradients or glows. Neo Brutalism is used for structure only, so the
+  page stays readable with 30 game cards on screen.
+*/
+
 :root {
-  --background: #0b1020;
-  --foreground: #f1f5f9;
+  /* Base surfaces */
+  --bg: #150f2b;
+  --bg-deep: #0d0919;
+  --ink: #0a0510;
+  --panel: #fff7e8;
+  --panel-2: #ffeccc;
+
+  /* Accents */
+  --yellow: #ffd23f;
+  --pink: #ff3b6b;
+  --cyan: #35d0f5;
+  --orange: #ff8a1f;
+  --mint: #6ee7b7;
+  --violet: #a78bfa;
+  --magenta: #f0abfc;
+  --sky: #93c5fd;
+
+  /* Category colours, referenced from components by name */
+  --cat-action: var(--pink);
+  --cat-arcade: var(--yellow);
+  --cat-puzzle: var(--cyan);
+  --cat-racing: var(--orange);
+  --cat-sports: var(--mint);
+  --cat-adventure: var(--violet);
+  --cat-strategy: var(--magenta);
+  --cat-casual: var(--sky);
+
+  --background: var(--bg);
+  --foreground: var(--panel);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 }
 
 * {
-  scrollbar-color: #6366f1 #0b1020;
+  scrollbar-color: var(--yellow) var(--bg-deep);
 }
 
 html {
@@ -21,12 +58,89 @@ html {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  color: var(--panel);
+  font-family: var(--font-body), system-ui, sans-serif;
+  /* Dot grid, like the speckle on an arcade cabinet side panel. */
+  background-image: radial-gradient(
+    rgba(255, 255, 255, 0.07) 1.5px,
+    transparent 1.5px
+  );
+  background-size: 22px 22px;
+  background-attachment: fixed;
 }
 
-/* Respect reduced motion preference site-wide (PRD accessibility requirement). */
+/* ---------- Neo Brutalist primitives ---------- */
+
+.nb {
+  border: 3px solid var(--ink);
+}
+
+.nb-2 {
+  border: 2px solid var(--ink);
+}
+
+.nb-sh {
+  box-shadow: 5px 5px 0 0 var(--ink);
+}
+
+.nb-sh-sm {
+  box-shadow: 3px 3px 0 0 var(--ink);
+}
+
+.nb-sh-lg {
+  box-shadow: 8px 8px 0 0 var(--ink);
+}
+
+/*
+  Interactive panels lift on hover and physically press down on click.
+  Motion is tiny and transform-only so it stays cheap and is easy to
+  disable for reduced-motion users.
+*/
+.nb-lift {
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.nb-lift:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 8px 8px 0 0 var(--ink);
+}
+
+.nb-lift:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 0 var(--ink);
+}
+
+.nb-press {
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.nb-press:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 7px 7px 0 0 var(--ink);
+}
+
+.nb-press:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--ink);
+}
+
+/* Display type: chunky, uppercase, tight. */
+.font-display {
+  font-family: var(--font-display), var(--font-body), system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+/* Thin black outline on light text so headings read over any backdrop. */
+.ink-edge {
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -39,14 +153,34 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  /* Keep the depth cue, drop the movement. */
+  .nb-lift:hover,
+  .nb-press:hover,
+  .nb-lift:active,
+  .nb-press:active {
+    transform: none;
+  }
 }
 
-/* Visible focus outline everywhere, on top of Tailwind's focus-visible utilities. */
+/*
+  Focus ring has to survive both cream panels and the dark background, so
+  it is a yellow ring wrapped in black rather than a single colour.
+*/
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid #818cf8;
+  outline: 3px solid var(--yellow);
   outline-offset: 2px;
-  border-radius: 4px;
+  box-shadow: 0 0 0 6px var(--ink);
+  border-radius: 2px;
+}
+
+/* Horizontal pill rails on mobile: keep the scroll, hide the bar. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

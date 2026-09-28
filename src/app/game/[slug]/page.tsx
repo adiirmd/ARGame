@@ -5,6 +5,7 @@ import GamePlayer from "@/components/GamePlayer";
 import GameCard from "@/components/GameCard";
 import { getAllGames, getGameBySlug, getGamesByCategory } from "@/data/games";
 import { CATEGORY_LABELS } from "@/lib/types";
+import { CATEGORY_COLOR } from "@/lib/category-style";
 import { getSiteUrl } from "@/lib/site";
 
 type Params = Promise<{ slug: string }>;
@@ -56,6 +57,7 @@ export default async function GameDetailPage({ params }: { params: Params }) {
   if (!game) notFound();
 
   const siteUrl = getSiteUrl();
+  const accent = CATEGORY_COLOR[game.category];
   const related = getGamesByCategory(game.category)
     .filter((g) => g.slug !== game.slug)
     .slice(0, 4);
@@ -95,49 +97,81 @@ export default async function GameDetailPage({ params }: { params: Params }) {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <nav aria-label="Breadcrumb" className="mb-4 text-sm text-slate-400">
-        <Link href="/" className="hover:text-white">
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      <nav
+        aria-label="Breadcrumb"
+        className="mb-4 flex flex-wrap items-center gap-1.5 text-xs text-[var(--panel)]/60"
+      >
+        <Link href="/" className="underline-offset-4 hover:text-[var(--panel)] hover:underline">
           Home
-        </Link>{" "}
-        /{" "}
-        <Link href={`/games/${game.category}`} className="hover:text-white">
+        </Link>
+        <span aria-hidden="true">/</span>
+        <Link
+          href={`/games/${game.category}`}
+          className="underline-offset-4 hover:text-[var(--panel)] hover:underline"
+        >
           {CATEGORY_LABELS[game.category]}
-        </Link>{" "}
-        / <span className="text-slate-300">{game.title}</span>
+        </Link>
+        <span aria-hidden="true">/</span>
+        <span className="text-[var(--panel)]/85">{game.title}</span>
       </nav>
 
-      <Link
-        href={`/games/${game.category}`}
-        className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-indigo-300 hover:text-indigo-200"
-      >
-        ← Back to {CATEGORY_LABELS[game.category]} games
-      </Link>
-
-      <h1 className="mt-2 text-3xl font-extrabold text-white">{game.title}</h1>
-      <p className="mt-2 max-w-2xl text-slate-400">{game.description}</p>
-
-      <div className="mt-6">
-        <GamePlayer game={game} />
+      {/* Title block sits above the player so the game itself stays the
+          largest thing on screen. */}
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-2xl uppercase leading-tight text-[var(--panel)] sm:text-3xl">
+            {game.title}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[var(--panel)]/70">
+            {game.description}
+          </p>
+        </div>
+        <span
+          className="nb-2 nb-sh-sm shrink-0 px-3 py-1.5 font-display text-[10px] uppercase text-[var(--ink)]"
+          style={{ backgroundColor: accent }}
+        >
+          {CATEGORY_LABELS[game.category]}
+        </span>
       </div>
 
-      <dl className="mt-8 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
+      <GamePlayer game={game} />
+
+      <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Info label="Category" value={CATEGORY_LABELS[game.category]} />
         <Info label="Controls" value={game.controls ?? "Not specified"} />
         <Info label="Orientation" value={game.orientation ?? "any"} />
         <Info label="Published" value={game.publishedAt} />
       </dl>
 
-      <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-xs text-slate-500">
-        Source: {game.source} | License: {game.license}
+      <div className="nb-2 mt-4 bg-[var(--panel)] p-3 text-xs leading-relaxed text-[var(--ink)]/65">
+        <span className="font-bold uppercase text-[var(--ink)]">Source: </span>
+        {game.source}
+        <span className="mx-2 text-[var(--ink)]/30">|</span>
+        <span className="font-bold uppercase text-[var(--ink)]">License: </span>
+        {game.license}
+      </div>
+
+      <div className="mt-6">
+        <Link
+          href={`/games/${game.category}`}
+          className="nb-2 nb-sh-sm nb-press inline-block bg-[var(--panel)] px-4 py-2 font-display text-[11px] uppercase text-[var(--ink)]"
+        >
+          ◂ More {CATEGORY_LABELS[game.category]}
+        </Link>
       </div>
 
       {related.length > 0 && (
-        <section className="mt-16">
-          <h2 className="mb-4 text-xl font-bold text-white">
+        <section className="mt-14">
+          <h2 className="font-display text-xl uppercase text-[var(--panel)]">
+            <span
+              aria-hidden="true"
+              className="mr-2 inline-block h-4 w-4 border-2 border-[var(--ink)] align-middle"
+              style={{ backgroundColor: accent }}
+            />
             More {CATEGORY_LABELS[game.category]} games
           </h2>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
             {related.map((g) => (
               <GameCard key={g.id} game={g} />
             ))}
@@ -156,9 +190,13 @@ export default async function GameDetailPage({ params }: { params: Params }) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="mt-1 font-medium text-slate-200">{value}</dd>
+    <div className="nb-2 bg-[var(--panel)] p-3">
+      <dt className="font-display text-[10px] uppercase tracking-wide text-[var(--ink)]/55">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm font-medium leading-snug text-[var(--ink)]">
+        {value}
+      </dd>
     </div>
   );
 }

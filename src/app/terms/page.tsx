@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import TextPage from "@/components/TextPage";
 
 export const metadata: Metadata = {
   title: "Terms of Use",
@@ -9,30 +10,24 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 text-slate-300">
-      <h1 className="text-3xl font-extrabold text-white">Terms of Use</h1>
-      <div className="mt-6 space-y-4 leading-relaxed text-sm">
-        <p>
-          By using AR Game, you agree to use the site and its games for
-          personal, non-commercial entertainment purposes.
-        </p>
-        <p>
-          All games are provided &quot;as is&quot;, without warranty of any
-          kind. Every game on this site is either an original creation made
-          for AR Game or an open-source project included under a verified
-          license that permits redistribution; the exact source and license
-          for each game is listed on its game page.
-        </p>
-        <p>
-          You may not attempt to scrape, mirror, or redistribute this
-          site&apos;s content in bulk, attempt to bypass security controls,
-          or use the site in any way that could disrupt service for other
-          players.
-        </p>
-        <p>
-          We reserve the right to update these terms as the site evolves.
-        </p>
-      </div>
-    </div>
+    <TextPage title="Terms of Use" accent="var(--sky)" glyph="📜">
+      <p>
+        By using AR Game, you agree to use the site and its games for personal,
+        non-commercial entertainment purposes.
+      </p>
+      <p>
+        All games are provided &quot;as is&quot;, without warranty of any kind.
+        Every game on this site is either an original creation made for AR Game
+        or an open-source project included under a verified license that
+        permits redistribution; the exact source and license for each game is
+        listed on its game page.
+      </p>
+      <p>
+        You may not attempt to scrape, mirror, or redistribute this site&apos;s
+        content in bulk, attempt to bypass security controls, or use the site
+        in any way that could disrupt service for other players.
+      </p>
+      <p>We reserve the right to update these terms as the site evolves.</p>
+    </TextPage>
   );
 }
