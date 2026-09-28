@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="HexGL game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<defs><linearGradient id="hg" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#0ea5e9"/><stop offset="1" stop-color="#1e1b4b"/></linearGradient></defs>
+<path d="M40 240 L160 60 L240 60 L360 240 Z" fill="url(#hg)" opacity="0.55"/>
+<path d="M110 240 L180 95 L220 95 L290 240 Z" fill="#0f172a"/>
+<polygon points="200,120 224,168 200,156 176,168" fill="#38bdf8"/>
+<circle cx="200" cy="96" r="7" fill="#f97316"/>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">HEXGL</text>
+</svg>

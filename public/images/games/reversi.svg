@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Reversi game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<rect x="110" y="45" width="180" height="180" rx="8" fill="#14532d"/>
+<g stroke="#065f46" stroke-width="2"><line x1="155" y1="45" x2="155" y2="225"/><line x1="110" y1="90" x2="290" y2="90"/><line x1="200" y1="45" x2="200" y2="225"/><line x1="110" y1="135" x2="290" y2="135"/><line x1="245" y1="45" x2="245" y2="225"/><line x1="110" y1="180" x2="290" y2="180"/></g>
+<g><circle cx="177" cy="112" r="17" fill="#0f172a"/><circle cx="222" cy="112" r="17" fill="#f8fafc"/>
+<circle cx="177" cy="157" r="17" fill="#f8fafc"/><circle cx="222" cy="157" r="17" fill="#0f172a"/></g>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">REVERSI</text>
+</svg>

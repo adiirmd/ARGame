@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Blockrain game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<rect x="110" y="40" width="180" height="200" rx="8" fill="#111827" stroke="#334155" stroke-width="3"/>
+<g opacity="0.95">
+<rect x="122" y="52" width="40" height="40" fill="#0ea5e9"/><rect x="202" y="52" width="40" height="40" fill="#f43f5e"/>
+<rect x="162" y="112" width="40" height="40" fill="#a855f7"/><rect x="202" y="112" width="40" height="40" fill="#a855f7"/>
+<rect x="122" y="192" width="40" height="40" fill="#f59e0b"/><rect x="162" y="192" width="40" height="40" fill="#4ade80"/>
+<rect x="202" y="192" width="40" height="40" fill="#22d3ee"/><rect x="242" y="192" width="40" height="40" fill="#f43f5e"/></g>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">BLOCKRAIN</text>
+</svg>

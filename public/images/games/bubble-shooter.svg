@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Bubble Shooter game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<g>
+<circle cx="130" cy="70" r="21" fill="#f43f5e"/><circle cx="174" cy="70" r="21" fill="#0ea5e9"/>
+<circle cx="218" cy="70" r="21" fill="#fbbf24"/><circle cx="262" cy="70" r="21" fill="#4ade80"/>
+<circle cx="152" cy="108" r="21" fill="#a855f7"/><circle cx="196" cy="108" r="21" fill="#f43f5e"/>
+<circle cx="240" cy="108" r="21" fill="#22d3ee"/></g>
+<path d="M200 220 L200 160" stroke="#475569" stroke-width="5" stroke-linecap="round" stroke-dasharray="9 7"/>
+<circle cx="200" cy="222" r="17" fill="#fbbf24" stroke="#f8fafc" stroke-width="3"/>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">BUBBLE SHOOTER</text>
+</svg>

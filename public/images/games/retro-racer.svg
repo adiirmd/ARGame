@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Retro Racer game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#7c3aed"/><stop offset="1" stop-color="#f97316"/></linearGradient></defs>
+<rect x="40" y="40" width="320" height="95" fill="url(#sky)" opacity="0.65"/>
+<circle cx="200" cy="130" r="42" fill="#fbbf24" opacity="0.85"/>
+<path d="M40 235 L165 135 L235 135 L360 235 Z" fill="#1e293b"/>
+<path d="M196 135 L204 135 L214 235 L186 235 Z" fill="#e2e8f0" opacity="0.8"/>
+<rect x="168" y="196" width="64" height="26" rx="6" fill="#f43f5e"/>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">RETRO RACER</text>
+</svg>

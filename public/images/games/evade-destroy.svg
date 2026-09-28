@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Evade and Destroy game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<g fill="#334155" opacity="0.6">
+<circle cx="90" cy="70" r="3"/><circle cx="310" cy="90" r="3"/><circle cx="150" cy="55" r="2"/><circle cx="265" cy="60" r="2"/></g>
+<polygon points="200,180 226,232 200,218 174,232" fill="#22d3ee"/>
+<g fill="#f43f5e"><polygon points="130,80 146,110 114,110"/><polygon points="270,80 286,110 254,110"/>
+<polygon points="200,60 216,90 184,90"/></g>
+<g stroke="#fbbf24" stroke-width="4" stroke-linecap="round"><path d="M200 168 V140"/><path d="M200 128 V112"/></g>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">EVADE AND DESTROY</text>
+</svg>

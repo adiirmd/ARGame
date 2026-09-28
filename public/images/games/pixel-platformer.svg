@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Pixel Platformer game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<g fill="#1e293b">
+<rect x="60" y="196" width="130" height="30" rx="4"/><rect x="214" y="196" width="126" height="30" rx="4"/>
+<rect x="110" y="140" width="80" height="20" rx="4"/><rect x="232" y="112" width="80" height="20" rx="4"/></g>
+<rect x="128" y="108" width="26" height="32" rx="4" fill="#22d3ee"/>
+<circle cx="141" cy="100" r="11" fill="#fbbf24"/>
+<g fill="#f59e0b"><rect x="262" y="88" width="16" height="16" rx="3"/><rect x="286" y="88" width="16" height="16" rx="3"/></g>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">PIXEL PLATFORMER</text>
+</svg>

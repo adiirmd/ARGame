@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Hextris game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<g transform="translate(200,145)">
+<polygon points="0,-62 54,-31 54,31 0,62 -54,31 -54,-31" fill="#1e293b" stroke="#334155" stroke-width="3"/>
+<polygon points="0,-40 35,-20 35,20 0,40 -35,20 -35,-20" fill="#0f172a"/>
+<polygon points="0,-62 54,-31 35,-20 0,-40" fill="#f43f5e"/>
+<polygon points="54,-31 54,31 35,20 35,-20" fill="#f59e0b"/>
+<polygon points="0,62 -54,31 -35,20 0,40" fill="#22d3ee"/>
+<polygon points="-54,31 -54,-31 -35,-20 -35,20" fill="#a855f7"/></g>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">HEXTRIS</text>
+</svg>

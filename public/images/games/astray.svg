@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Astray game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<rect x="70" y="45" width="260" height="180" rx="10" fill="#111827" stroke="#334155" stroke-width="3"/>
+<g stroke="#475569" stroke-width="7" stroke-linecap="round">
+<path d="M100 75 H210"/><path d="M240 75 H300"/><path d="M100 110 H150"/><path d="M185 110 H300"/>
+<path d="M100 145 H255"/><path d="M130 180 H300"/></g>
+<circle cx="115" cy="196" r="12" fill="#22d3ee"/>
+<rect x="284" y="58" width="24" height="24" rx="4" fill="#4ade80"/>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">ASTRAY</text>
+</svg>

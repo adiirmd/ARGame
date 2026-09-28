@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Block Drop game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<rect x="120" y="40" width="160" height="200" rx="8" fill="#111827" stroke="#334155" stroke-width="3"/>
+<g>
+<rect x="132" y="60" width="36" height="36" fill="#22d3ee"/><rect x="168" y="60" width="36" height="36" fill="#22d3ee"/>
+<rect x="204" y="96" width="36" height="36" fill="#f59e0b"/><rect x="240" y="96" width="36" height="36" fill="#f59e0b"/>
+<rect x="132" y="168" width="36" height="36" fill="#a855f7"/><rect x="168" y="168" width="36" height="36" fill="#f43f5e"/>
+<rect x="204" y="168" width="36" height="36" fill="#4ade80"/><rect x="240" y="168" width="36" height="36" fill="#0ea5e9"/>
+<rect x="132" y="204" width="144" height="36" fill="#334155"/></g>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">BLOCK DROP</text>
+</svg>

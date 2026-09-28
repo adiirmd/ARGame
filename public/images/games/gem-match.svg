@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Gem Match game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<rect x="90" y="45" width="220" height="180" rx="10" fill="#111827" stroke="#334155" stroke-width="3"/>
+<g>
+<circle cx="132" cy="88" r="19" fill="#f43f5e"/><circle cx="186" cy="88" r="19" fill="#22d3ee"/><circle cx="240" cy="88" r="19" fill="#fbbf24"/>
+<polygon points="132,124 149,152 115,152" fill="#a855f7"/><polygon points="186,124 203,152 169,152" fill="#4ade80"/>
+<rect x="224" y="130" width="32" height="32" rx="6" fill="#0ea5e9"/>
+<circle cx="132" cy="186" r="19" fill="#4ade80"/><rect x="170" y="170" width="32" height="32" rx="6" fill="#f43f5e"/>
+<polygon points="240,168 257,196 223,196" fill="#fbbf24"/></g>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">GEM MATCH</text>
+</svg>

@@ -1,5 +1,5 @@
 /**
- * Game Validator — npm run validate-games
+ * Game Validator, dijalankan lewat npm run validate-games
  *
  * Detects: duplicate slug, missing title, missing description, invalid
  * category, missing thumbnail, missing game entry point, invalid URL,

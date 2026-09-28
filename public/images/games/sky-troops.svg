@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="Sky Troops game thumbnail">
+<rect width="400" height="300" fill="#0f172a"/>
+<g fill="#1e293b" opacity="0.55">
+<ellipse cx="110" cy="80" rx="34" ry="15"/><ellipse cx="292" cy="112" rx="28" ry="12"/></g>
+<g transform="translate(200,150)">
+<polygon points="0,-34 10,-6 0,2 -10,-6" fill="#22d3ee"/>
+<rect x="-46" y="-8" width="92" height="12" rx="6" fill="#0ea5e9"/>
+<polygon points="0,4 12,30 -12,30" fill="#38bdf8"/></g>
+<g fill="#f43f5e"><polygon points="130,206 142,228 118,228"/><polygon points="272,196 284,218 260,218"/></g>
+<text x="200" y="272" fill="#e2e8f0" font-family="system-ui,sans-serif" font-weight="700" font-size="20" text-anchor="middle">SKY TROOPS</text>
+</svg>
