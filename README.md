@@ -2,7 +2,9 @@
 
 Portal game browser gratis. Semua game bisa langsung dimainkan tanpa install, tanpa akun, tanpa iklan.
 
-Live di https://game.adiirmd.my.id
+Live di https://game.adiirmd.id
+
+Dibangun dengan Next.js 16 (App Router), React 19, dan TypeScript. Game-nya sendiri berupa file HTML dan JavaScript biasa yang dimuat di dalam iframe.
 
 ## Isi katalog
 
@@ -60,7 +62,7 @@ npm install
 npm run dev
 ```
 
-Buka http://localhost:3000
+Buka http://127.0.0.1:4310. Port bisa diganti lewat `PORT`.
 
 ## Sebelum push
 
@@ -74,16 +76,21 @@ npm run validate-games
 Kalau semua lolos, baru build:
 
 ```bash
-PUBLIC_SITE_URL=https://game.adiirmd.my.id npm run build
+PUBLIC_SITE_URL=https://game.adiirmd.id npm run build
 ```
 
 ## Struktur singkat
 
 - `src/data/games.ts` daftar semua game dan metadatanya
+- `src/app/` halaman: beranda, katalog, pencarian, detail game, about, privacy, terms
 - `public/games/` file game asli (HTML/JS), disajikan langsung sebagai static file
 - `src/middleware.ts` setup CSP dengan nonce, biar hydration Next.js tetap jalan tanpa perlu unsafe-inline
 - `src/components/GamePlayer.tsx` player iframe yang dipakai semua halaman game
+- `scripts/validate-games.ts` cek katalog: slug ganda, judul, deskripsi, kategori, thumbnail, file entry, URL, sumber, dan lisensi
+- `tests/` test untuk data katalog
 
 ## Deploy
 
-Server jalan di Debian, Next.js dijalankan lewat systemd (`ar-game.service`) dan diakses lewat reverse proxy Apache2. Domain publik dilewatkan Cloudflare Tunnel.
+Production jalan di Vercel, tersambung langsung ke repo ini, jadi setiap push ke `main` otomatis ter-deploy. Set `PUBLIC_SITE_URL` ke domain publiknya di environment variable proyek Vercel. Tanpa itu, canonical URL, sitemap, dan metadata Open Graph jatuh ke alamat lokal.
+
+Salinan kedua jalan di server Debian sendiri (https://game.adiirmd.my.id): Next.js dijalankan lewat systemd (`ar-game.service`, `next start` di 127.0.0.1:4310) dengan `PUBLIC_SITE_URL=https://game.adiirmd.my.id`, diakses lewat reverse proxy Apache2, dan domain publiknya dilewatkan Cloudflare Tunnel, jadi tidak ada port yang dibuka ke internet.
